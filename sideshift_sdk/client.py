@@ -125,6 +125,15 @@ class BaseClient:
             "response_times": [],  # For calculating percentiles
         }
         self._metrics_lock: threading.Lock | asyncio.Lock | None = None
+        
+        # Circuit breaker (disabled by default)
+        self._circuit_breaker_enabled: bool = False
+        self._circuit_breaker_failure_threshold: int = 5
+        self._circuit_breaker_timeout: float = 60.0  # seconds
+        self._circuit_breaker_state: str = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
+        self._circuit_breaker_failure_count: int = 0
+        self._circuit_breaker_last_failure_time: float = 0.0
+        self._circuit_breaker_lock: threading.Lock | asyncio.Lock | None = None
 
     def set_secret(self, secret: str | None) -> None:
         """Update the secret key for authentication.
@@ -1063,6 +1072,142 @@ class BaseClient:
                 "response_times": [],
             }
 
+    def enable_circuit_breaker(
+        self, enabled: bool = True, failure_threshold: int = 5, timeout: float = 60.0
+    ) -> None:
+        """Enable or disable circuit breaker pattern.
+
+        Args:
+            enabled: Whether to enable circuit breaker (default: True)
+            failure_threshold: Number of failures before opening circuit (default: 5)
+            timeout: Seconds to wait before half-opening circuit (default: 60.0)
+        """
+        self._circuit_breaker_enabled = enabled
+        self._circuit_breaker_failure_threshold = failure_threshold
+        self._circuit_breaker_timeout = timeout
+        if enabled and self._circuit_breaker_lock is None:
+            if hasattr(self, "_session"):  # Sync client
+                self._circuit_breaker_lock = threading.Lock()
+            elif hasattr(self, "_client"):  # Async client
+                self._circuit_breaker_lock = asyncio.Lock()
+
+    def get_circuit_breaker_state(self) -> dict[str, Any]:
+        """Get current circuit breaker state.
+
+        Returns:
+            Dictionary with circuit breaker state information
+        """
+        if not self._circuit_breaker_enabled:
+            return {"enabled": False}
+        return {
+            "enabled": True,
+            "state": self._circuit_breaker_state,
+            "failure_count": self._circuit_breaker_failure_count,
+            "failure_threshold": self._circuit_breaker_failure_threshold,
+            "timeout": self._circuit_breaker_timeout,
+            "last_failure_time": self._circuit_breaker_last_failure_time,
+        }
+
+    def _check_circuit_breaker(self) -> None:
+        """Check circuit breaker state and raise if circuit is open.
+
+        Raises:
+            SideShiftNetworkError: If circuit breaker is open
+        """
+        if not self._circuit_breaker_enabled:
+            return
+
+        current_time = time.time()
+
+        if isinstance(self._circuit_breaker_lock, threading.Lock):
+            with self._circuit_breaker_lock:
+                self._update_circuit_breaker_state(current_time)
+                if self._circuit_breaker_state == "OPEN":
+                    raise SideShiftNetworkError(
+                        "Circuit breaker is OPEN - too many failures detected",
+                        response_data={"circuit_breaker_state": "OPEN"},
+                    )
+        else:
+            # For async, we'll check in the async method
+            self._update_circuit_breaker_state(current_time)
+            if self._circuit_breaker_state == "OPEN":
+                raise SideShiftNetworkError(
+                    "Circuit breaker is OPEN - too many failures detected",
+                    response_data={"circuit_breaker_state": "OPEN"},
+                )
+
+    def _update_circuit_breaker_state(self, current_time: float) -> None:
+        """Update circuit breaker state based on current conditions.
+
+        Args:
+            current_time: Current timestamp
+        """
+        if self._circuit_breaker_state == "OPEN":
+            # Check if timeout has passed to move to HALF_OPEN
+            if current_time - self._circuit_breaker_last_failure_time >= self._circuit_breaker_timeout:
+                self._circuit_breaker_state = "HALF_OPEN"
+                self._circuit_breaker_failure_count = 0
+        elif self._circuit_breaker_state == "HALF_OPEN":
+            # Will be updated based on request outcome
+            pass
+        # CLOSED state doesn't need updating here
+
+    def _record_circuit_breaker_success(self) -> None:
+        """Record a successful request for circuit breaker."""
+        if not self._circuit_breaker_enabled:
+            return
+
+        if isinstance(self._circuit_breaker_lock, threading.Lock):
+            with self._circuit_breaker_lock:
+                if self._circuit_breaker_state == "HALF_OPEN":
+                    # Success in half-open, close the circuit
+                    self._circuit_breaker_state = "CLOSED"
+                    self._circuit_breaker_failure_count = 0
+                elif self._circuit_breaker_state == "CLOSED":
+                    # Reset failure count on success
+                    self._circuit_breaker_failure_count = 0
+        else:
+            # For async, handled in async method
+            if self._circuit_breaker_state == "HALF_OPEN":
+                self._circuit_breaker_state = "CLOSED"
+                self._circuit_breaker_failure_count = 0
+            elif self._circuit_breaker_state == "CLOSED":
+                self._circuit_breaker_failure_count = 0
+
+    def _record_circuit_breaker_failure(self) -> None:
+        """Record a failed request for circuit breaker."""
+        if not self._circuit_breaker_enabled:
+            return
+
+        current_time = time.time()
+
+        if isinstance(self._circuit_breaker_lock, threading.Lock):
+            with self._circuit_breaker_lock:
+                self._circuit_breaker_failure_count += 1
+                self._circuit_breaker_last_failure_time = current_time
+
+                if self._circuit_breaker_state == "HALF_OPEN":
+                    # Failure in half-open, open the circuit again
+                    self._circuit_breaker_state = "OPEN"
+                elif (
+                    self._circuit_breaker_state == "CLOSED"
+                    and self._circuit_breaker_failure_count >= self._circuit_breaker_failure_threshold
+                ):
+                    # Too many failures, open the circuit
+                    self._circuit_breaker_state = "OPEN"
+        else:
+            # For async, handled in async method
+            self._circuit_breaker_failure_count += 1
+            self._circuit_breaker_last_failure_time = current_time
+
+            if self._circuit_breaker_state == "HALF_OPEN":
+                self._circuit_breaker_state = "OPEN"
+            elif (
+                self._circuit_breaker_state == "CLOSED"
+                and self._circuit_breaker_failure_count >= self._circuit_breaker_failure_threshold
+            ):
+                self._circuit_breaker_state = "OPEN"
+
 
 class SideShiftClient(BaseClient):
     """Synchronous client for SideShift API."""
@@ -1161,6 +1306,9 @@ class SideShiftClient(BaseClient):
         Returns:
             Response JSON data
         """
+        # Check circuit breaker
+        self._check_circuit_breaker()
+
         # Prepare request (common logic)
         url, request_id, request_headers, retry_count, request_timeout = self._prepare_request(
             method, endpoint, params, json_data, headers, require_auth, require_user_ip, max_retries, timeout
@@ -1203,6 +1351,9 @@ class SideShiftClient(BaseClient):
 
                 self._call_response_hooks(method, endpoint, response_data)
                 
+                # Record circuit breaker success
+                self._record_circuit_breaker_success()
+                
                 # Track successful request metrics
                 if self._metrics_enabled and request_start_time:
                     response_time = time.time() - request_start_time
@@ -1232,6 +1383,9 @@ class SideShiftClient(BaseClient):
                     continue
                 raise
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                # Record circuit breaker failure
+                self._record_circuit_breaker_failure()
+                
                 # Network errors - raise SDK exception with better message
                 error_msg = f"Network error: {str(e)}"
                 if isinstance(e, requests.exceptions.Timeout):
@@ -1253,6 +1407,9 @@ class SideShiftClient(BaseClient):
                         self._metrics["failed_requests"] += 1
                 raise network_error from e
             except requests.exceptions.RequestException as e:
+                # Record circuit breaker failure
+                self._record_circuit_breaker_failure()
+                
                 # Other requests exceptions (DNS, SSL, etc.)
                 if self._enable_logging:
                     self._logger.error(f"Request exception for {method} {endpoint} [Request-ID: {request_id}]: {str(e)}")
@@ -1521,9 +1678,11 @@ class AsyncSideShiftClient(BaseClient):
         self.max_response_size: int = SDKConfig.get_max_response_size(max_response_size)
         self._client: httpx.AsyncClient | None = None
         
-        # Initialize async lock for deduplication
+        # Initialize async locks for deduplication and circuit breaker
         if self._enable_request_deduplication:
             self._deduplication_lock = asyncio.Lock()
+        if self._circuit_breaker_lock is None:
+            self._circuit_breaker_lock = asyncio.Lock()
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create async HTTP client.
@@ -1607,6 +1766,17 @@ class AsyncSideShiftClient(BaseClient):
 
         client = await self._get_client()
         
+        # Check circuit breaker (async version)
+        if self._circuit_breaker_enabled:
+            current_time = time.time()
+            async with self._circuit_breaker_lock:  # type: ignore[union-attr]
+                self._update_circuit_breaker_state(current_time)
+                if self._circuit_breaker_state == "OPEN":
+                    raise SideShiftNetworkError(
+                        "Circuit breaker is OPEN - too many failures detected",
+                        response_data={"circuit_breaker_state": "OPEN"},
+                    )
+        
         # Track metrics
         request_start_time = time.time() if self._metrics_enabled else None
         if self._metrics_enabled:
@@ -1643,6 +1813,11 @@ class AsyncSideShiftClient(BaseClient):
                     )
 
                     await self._call_response_hooks_async(method, endpoint, response_data)
+                    
+                    # Record circuit breaker success
+                    if self._circuit_breaker_enabled:
+                        async with self._circuit_breaker_lock:  # type: ignore[union-attr]
+                            self._record_circuit_breaker_success()
                     
                     # Store in cache if deduplication enabled
                     if self._enable_request_deduplication:
@@ -1686,6 +1861,11 @@ class AsyncSideShiftClient(BaseClient):
                         continue
                     raise
                 except (httpx.ConnectError, httpx.TimeoutException) as e:
+                    # Record circuit breaker failure
+                    if self._circuit_breaker_enabled:
+                        async with self._circuit_breaker_lock:  # type: ignore[union-attr]
+                            self._record_circuit_breaker_failure()
+                    
                     # Network errors - raise SDK exception with better message
                     error_msg = f"Network error: {str(e)}"
                     if isinstance(e, httpx.TimeoutException):
@@ -1705,6 +1885,11 @@ class AsyncSideShiftClient(BaseClient):
                         self._logger.debug(f"Request cancelled: {method} {endpoint} [Request-ID: {request_id}]")
                     raise
                 except httpx.RequestError as e:
+                    # Record circuit breaker failure
+                    if self._circuit_breaker_enabled:
+                        async with self._circuit_breaker_lock:  # type: ignore[union-attr]
+                            self._record_circuit_breaker_failure()
+                    
                     # Other httpx exceptions (DNS, SSL, etc.)
                     if self._enable_logging:
                         self._logger.error(f"Request error for {method} {endpoint} [Request-ID: {request_id}]: {str(e)}")
