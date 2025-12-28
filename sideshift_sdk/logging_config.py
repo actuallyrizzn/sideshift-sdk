@@ -1,14 +1,13 @@
 """Logging configuration for SideShift SDK."""
 
 import logging
-from typing import Optional
 
 # Create logger for the SDK
 logger = logging.getLogger("sideshift_sdk")
 logger.addHandler(logging.NullHandler())  # Prevent propagation to root logger by default
 
 
-def configure_logging(level: int | str = logging.WARNING, handler: Optional[logging.Handler] = None) -> None:
+def configure_logging(level: int | str = logging.WARNING, handler: logging.Handler | None = None) -> None:
     """Configure logging for the SideShift SDK.
 
     Args:

@@ -1,7 +1,6 @@
 """Configuration management for SideShift SDK."""
 
 import os
-from typing import Optional
 
 from sideshift_sdk.constants import BASE_URL
 
@@ -22,7 +21,7 @@ class SDKConfig:
     DEFAULT_VERIFY_SSL = True
 
     @staticmethod
-    def get_timeout(provided: Optional[int] = None) -> int:
+    def get_timeout(provided: int | None = None) -> int:
         """Get timeout value from provided value or environment variable.
 
         Args:
@@ -42,7 +41,7 @@ class SDKConfig:
         return SDKConfig.DEFAULT_TIMEOUT
 
     @staticmethod
-    def get_max_retries(provided: Optional[int] = None) -> int:
+    def get_max_retries(provided: int | None = None) -> int:
         """Get max retries value from provided value or environment variable.
 
         Args:
@@ -62,7 +61,7 @@ class SDKConfig:
         return SDKConfig.DEFAULT_MAX_RETRIES
 
     @staticmethod
-    def get_base_url(provided: Optional[str] = None) -> str:
+    def get_base_url(provided: str | None = None) -> str:
         """Get base URL from provided value or environment variable.
 
         Args:
@@ -79,7 +78,7 @@ class SDKConfig:
         return SDKConfig.DEFAULT_BASE_URL
 
     @staticmethod
-    def get_max_connections(provided: Optional[int] = None) -> int:
+    def get_max_connections(provided: int | None = None) -> int:
         """Get max connections value from provided value or environment variable.
 
         Args:
@@ -99,7 +98,7 @@ class SDKConfig:
         return SDKConfig.DEFAULT_MAX_CONNECTIONS
 
     @staticmethod
-    def get_max_keepalive_connections(provided: Optional[int] = None) -> int:
+    def get_max_keepalive_connections(provided: int | None = None) -> int:
         """Get max keepalive connections value from provided value or environment variable.
 
         Args:
@@ -119,7 +118,7 @@ class SDKConfig:
         return SDKConfig.DEFAULT_MAX_KEEPALIVE_CONNECTIONS
 
     @staticmethod
-    def get_proxy(provided: Optional[str | dict[str, str]] = None) -> str | dict[str, str] | None:
+    def get_proxy(provided: str | dict[str, str] | None = None) -> str | dict[str, str] | None:
         """Get proxy value from provided value or environment variable.
 
         Args:
@@ -147,7 +146,7 @@ class SDKConfig:
         return None
 
     @staticmethod
-    def get_verify_ssl(provided: Optional[bool] = None) -> bool:
+    def get_verify_ssl(provided: bool | None = None) -> bool:
         """Get SSL verification value from provided value or environment variable.
 
         Args:
