@@ -119,6 +119,34 @@ class SDKConfig:
         return SDKConfig.DEFAULT_MAX_KEEPALIVE_CONNECTIONS
 
     @staticmethod
+    def get_proxy(provided: Optional[str | dict[str, str]] = None) -> str | dict[str, str] | None:
+        """Get proxy value from provided value or environment variable.
+
+        Args:
+            provided: Proxy value provided directly (takes precedence).
+                     Can be a string URL or dict mapping protocol to URL.
+
+        Returns:
+            Proxy configuration (string URL, dict, or None)
+        """
+        if provided is not None:
+            return provided
+        env_proxy = os.getenv("SIDESHIFT_PROXY")
+        if env_proxy:
+            return env_proxy
+        # Also check standard HTTP_PROXY and HTTPS_PROXY
+        http_proxy = os.getenv("HTTP_PROXY") or os.getenv("http_proxy")
+        https_proxy = os.getenv("HTTPS_PROXY") or os.getenv("https_proxy")
+        if http_proxy or https_proxy:
+            proxies = {}
+            if http_proxy:
+                proxies["http"] = http_proxy
+            if https_proxy:
+                proxies["https"] = https_proxy
+            return proxies
+        return None
+
+    @staticmethod
     def get_verify_ssl(provided: Optional[bool] = None) -> bool:
         """Get SSL verification value from provided value or environment variable.
 

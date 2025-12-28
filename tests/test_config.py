@@ -239,3 +239,62 @@ async def test_async_client_uses_config_verify_ssl():
     async with AsyncSideShiftClient(secret="test-secret", verify_ssl=False) as client:
         assert client.verify_ssl is False
 
+
+def test_get_proxy_from_provided():
+    """Test getting proxy from provided value."""
+    assert SDKConfig.get_proxy("http://proxy.example.com:8080") == "http://proxy.example.com:8080"
+    assert SDKConfig.get_proxy({"http": "http://proxy.example.com:8080"}) == {"http": "http://proxy.example.com:8080"}
+
+
+def test_get_proxy_from_env():
+    """Test getting proxy from environment variable."""
+    with patch.dict(os.environ, {"SIDESHIFT_PROXY": "http://proxy.example.com:8080"}):
+        assert SDKConfig.get_proxy() == "http://proxy.example.com:8080"
+
+
+def test_get_proxy_from_http_proxy_env():
+    """Test getting proxy from HTTP_PROXY environment variable."""
+    with patch.dict(os.environ, {"HTTP_PROXY": "http://proxy.example.com:8080"}):
+        result = SDKConfig.get_proxy()
+        assert isinstance(result, dict)
+        assert result["http"] == "http://proxy.example.com:8080"
+
+
+def test_get_proxy_from_https_proxy_env():
+    """Test getting proxy from HTTPS_PROXY environment variable."""
+    with patch.dict(os.environ, {"HTTPS_PROXY": "https://proxy.example.com:8080"}):
+        result = SDKConfig.get_proxy()
+        assert isinstance(result, dict)
+        assert result["https"] == "https://proxy.example.com:8080"
+
+
+def test_get_proxy_default():
+    """Test getting default proxy when nothing provided."""
+    with patch.dict(os.environ, {}, clear=True):
+        os.environ.pop("SIDESHIFT_PROXY", None)
+        os.environ.pop("HTTP_PROXY", None)
+        os.environ.pop("HTTPS_PROXY", None)
+        os.environ.pop("http_proxy", None)
+        os.environ.pop("https_proxy", None)
+        assert SDKConfig.get_proxy() is None
+
+
+def test_client_uses_config_proxy():
+    """Test that client uses configurable proxy."""
+    client = SideShiftClient(secret="test-secret", proxy="http://proxy.example.com:8080")
+    assert client.proxy == "http://proxy.example.com:8080"
+
+
+def test_client_uses_env_proxy():
+    """Test that client uses proxy from environment variable."""
+    with patch.dict(os.environ, {"SIDESHIFT_PROXY": "http://proxy.example.com:8080"}):
+        client = SideShiftClient(secret="test-secret")
+        assert client.proxy == "http://proxy.example.com:8080"
+
+
+@pytest.mark.asyncio
+async def test_async_client_uses_config_proxy():
+    """Test that async client uses configurable proxy."""
+    async with AsyncSideShiftClient(secret="test-secret", proxy="http://proxy.example.com:8080") as client:
+        assert client.proxy == "http://proxy.example.com:8080"
+
