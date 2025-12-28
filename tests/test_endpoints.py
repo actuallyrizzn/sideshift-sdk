@@ -2,13 +2,16 @@
 
 from unittest.mock import AsyncMock, Mock, patch
 
+import httpx
 import pytest
+import responses
 
 from sideshift_sdk.client import AsyncSideShiftClient, SideShiftClient
 from sideshift_sdk.endpoints import account, checkout, coins, pairs, quotes, shifts
 from sideshift_sdk.exceptions import SideShiftAPIError
 
 
+@responses.activate
 def test_get_coins():
     """Test get_coins endpoint."""
     client = SideShiftClient()
@@ -22,15 +25,24 @@ def test_get_coins():
             "fixedOnly": False,
             "variableOnly": False,
             "networksWithMemo": [],
+            "depositOffline": False,
+            "settleOffline": False,
         }
     ]
 
-    with patch.object(client, "get", return_value=mock_response):
-        coins_list = coins.get_coins(client)
-        assert len(coins_list) == 1
-        assert coins_list[0].coin == "btc"
+    responses.add(
+        responses.GET,
+        f"{client.base_url}/coins",
+        json=mock_response,
+        status=200,
+    )
+
+    coins_list = coins.get_coins(client)
+    assert len(coins_list) == 1
+    assert coins_list[0].coin == "btc"
 
 
+@responses.activate
 def test_get_pair():
     """Test get_pair endpoint."""
     client = SideShiftClient(secret="test-secret", affiliate_id="test-affiliate")
@@ -45,13 +57,20 @@ def test_get_pair():
         "settleNetwork": "mainnet",
     }
 
-    with patch.object(client, "get", return_value=mock_response):
-        pair = pairs.get_pair(client, from_coin="btc", to_coin="eth")
-        assert pair.min == "0.001"
-        assert pair.max == "10.0"
-        assert pair.rate == "15.5"
+    responses.add(
+        responses.GET,
+        f"{client.base_url}/pair/btc/eth",
+        json=mock_response,
+        status=200,
+    )
+
+    pair = pairs.get_pair(client, from_coin="btc", to_coin="eth")
+    assert pair.min == "0.001"
+    assert pair.max == "10.0"
+    assert pair.rate == "15.5"
 
 
+@responses.activate
 def test_request_quote():
     """Test request_quote endpoint."""
     client = SideShiftClient(secret="test-secret", affiliate_id="test-affiliate")
@@ -69,15 +88,21 @@ def test_request_quote():
         "rate": "15.0",
     }
 
-    with patch.object(client, "post", return_value=mock_response):
-        quote = quotes.request_quote(
-            client,
-            deposit_coin="btc",
-            settle_coin="eth",
-            deposit_amount="0.1",
-        )
-        assert quote.id == "test-quote-id"
-        assert quote.rate == "15.0"
+    responses.add(
+        responses.POST,
+        f"{client.base_url}/quotes",
+        json=mock_response,
+        status=200,
+    )
+
+    quote = quotes.request_quote(
+        client,
+        deposit_coin="btc",
+        settle_coin="eth",
+        deposit_amount="0.1",
+    )
+    assert quote.id == "test-quote-id"
+    assert quote.rate == "15.0"
 
 
 def test_request_quote_missing_amounts():
@@ -105,6 +130,7 @@ def test_request_quote_missing_affiliate_id():
         )
 
 
+@responses.activate
 def test_create_fixed_shift():
     """Test create_fixed_shift endpoint."""
     client = SideShiftClient(secret="test-secret", affiliate_id="test-affiliate")
@@ -129,16 +155,23 @@ def test_create_fixed_shift():
         "rate": "15.0",
     }
 
-    with patch.object(client, "post", return_value=mock_response):
-        shift = shifts.create_fixed_shift(
-            client,
-            quote_id="test-quote-id",
-            settle_address="0x...",
-        )
-        assert shift.id == "test-shift-id"
-        assert shift.type == "fixed"
+    responses.add(
+        responses.POST,
+        f"{client.base_url}/shifts/fixed",
+        json=mock_response,
+        status=200,
+    )
+
+    shift = shifts.create_fixed_shift(
+        client,
+        quote_id="test-quote-id",
+        settle_address="0x...",
+    )
+    assert shift.id == "test-shift-id"
+    assert shift.type == "fixed"
 
 
+@responses.activate
 def test_create_variable_shift():
     """Test create_variable_shift endpoint."""
     client = SideShiftClient(secret="test-secret", affiliate_id="test-affiliate")
@@ -158,17 +191,24 @@ def test_create_variable_shift():
         "status": "waiting",
     }
 
-    with patch.object(client, "post", return_value=mock_response):
-        shift = shifts.create_variable_shift(
-            client,
-            deposit_coin="btc",
-            settle_coin="eth",
-            settle_address="0x...",
-        )
-        assert shift.id == "test-shift-id"
-        assert shift.type == "variable"
+    responses.add(
+        responses.POST,
+        f"{client.base_url}/shifts/variable",
+        json=mock_response,
+        status=200,
+    )
+
+    shift = shifts.create_variable_shift(
+        client,
+        deposit_coin="btc",
+        settle_coin="eth",
+        settle_address="0x...",
+    )
+    assert shift.id == "test-shift-id"
+    assert shift.type == "variable"
 
 
+@responses.activate
 def test_get_shift():
     """Test get_shift endpoint."""
     client = SideShiftClient()
@@ -185,12 +225,19 @@ def test_get_shift():
         "status": "complete",
     }
 
-    with patch.object(client, "get", return_value=mock_response):
-        shift = shifts.get_shift(client, shift_id="test-shift-id")
-        assert shift.id == "test-shift-id"
-        assert shift.status == "complete"
+    responses.add(
+        responses.GET,
+        f"{client.base_url}/shifts/test-shift-id",
+        json=mock_response,
+        status=200,
+    )
+
+    shift = shifts.get_shift(client, shift_id="test-shift-id")
+    assert shift.id == "test-shift-id"
+    assert shift.status == "complete"
 
 
+@responses.activate
 def test_get_bulk_shifts():
     """Test get_bulk_shifts endpoint."""
     client = SideShiftClient()
@@ -220,13 +267,20 @@ def test_get_bulk_shifts():
         },
     ]
 
-    with patch.object(client, "get", return_value=mock_response):
-        shifts_list = shifts.get_bulk_shifts(client, shift_ids=["shift-1", "shift-2"])
-        assert len(shifts_list) == 2
-        assert shifts_list[0].id == "shift-1"
-        assert shifts_list[1].id == "shift-2"
+    responses.add(
+        responses.GET,
+        f"{client.base_url}/shifts",
+        json=mock_response,
+        status=200,
+    )
+
+    shifts_list = shifts.get_bulk_shifts(client, shift_ids=["shift-1", "shift-2"])
+    assert len(shifts_list) == 2
+    assert shifts_list[0].id == "shift-1"
+    assert shifts_list[1].id == "shift-2"
 
 
+@responses.activate
 def test_get_recent_shifts():
     """Test get_recent_shifts endpoint."""
     client = SideShiftClient()
@@ -243,10 +297,16 @@ def test_get_recent_shifts():
         }
     ]
 
-    with patch.object(client, "get", return_value=mock_response):
-        recent = shifts.get_recent_shifts(client, limit=10)
-        assert len(recent) == 1
-        assert recent[0].deposit_coin == "btc"
+    responses.add(
+        responses.GET,
+        f"{client.base_url}/recent-shifts",
+        json=mock_response,
+        status=200,
+    )
+
+    recent = shifts.get_recent_shifts(client, limit=10)
+    assert len(recent) == 1
+    assert recent[0].deposit_coin == "btc"
 
 
 def test_get_recent_shifts_invalid_limit():
@@ -260,6 +320,7 @@ def test_get_recent_shifts_invalid_limit():
         shifts.get_recent_shifts(client, limit=101)
 
 
+@responses.activate
 def test_get_account():
     """Test get_account endpoint."""
     client = SideShiftClient(secret="test-secret")
@@ -273,23 +334,37 @@ def test_get_account():
         "totalBalance": "100.0",
     }
 
-    with patch.object(client, "get", return_value=mock_response):
-        account_info = account.get_account(client)
-        assert account_info.id == "test-account-id"
-        assert account_info.total_balance == "100.0"
+    responses.add(
+        responses.GET,
+        f"{client.base_url}/account",
+        json=mock_response,
+        status=200,
+    )
+
+    account_info = account.get_account(client)
+    assert account_info.id == "test-account-id"
+    assert account_info.total_balance == "100.0"
 
 
+@responses.activate
 def test_get_permissions():
     """Test get_permissions endpoint."""
     client = SideShiftClient(user_ip="1.2.3.4")
 
     mock_response = {"createShift": True}
 
-    with patch.object(client, "get", return_value=mock_response):
-        permissions = account.get_permissions(client)
-        assert permissions.create_shift is True
+    responses.add(
+        responses.GET,
+        f"{client.base_url}/permissions",
+        json=mock_response,
+        status=200,
+    )
+
+    permissions = account.get_permissions(client)
+    assert permissions.create_shift is True
 
 
+@responses.activate
 def test_get_xai_stats():
     """Test get_xai_stats endpoint."""
     client = SideShiftClient()
@@ -309,48 +384,69 @@ def test_get_xai_stats():
         "svxaiPriceXai": "1.05",
     }
 
-    with patch.object(client, "get", return_value=mock_response):
-        stats = account.get_xai_stats(client)
-        assert stats.total_supply == 1000000
-        assert stats.xai_price_usd == "1.0"
+    responses.add(
+        responses.GET,
+        f"{client.base_url}/xai/stats",
+        json=mock_response,
+        status=200,
+    )
+
+    stats = account.get_xai_stats(client)
+    assert stats.total_supply == 1000000
+    assert stats.xai_price_usd == "1.0"
 
 
+@responses.activate
 def test_get_coin_icon():
     """Test get_coin_icon endpoint."""
     client = SideShiftClient()
-    mock_response = Mock()
-    mock_response.status_code = 200
-    mock_response.content = b"<svg>...</svg>"
 
-    with patch.object(client._session, "get", return_value=mock_response):
-        icon = coins.get_coin_icon(client, "btc", format="svg")
-        assert icon == b"<svg>...</svg>"
+    responses.add(
+        responses.GET,
+        f"{client.base_url}/coins/icon/btc",
+        body=b"<svg>...</svg>",
+        status=200,
+        content_type="image/svg+xml",
+    )
+
+    icon = coins.get_coin_icon(client, "btc", format="svg")
+    assert icon == b"<svg>...</svg>"
 
 
+@responses.activate
 def test_get_coin_icon_png():
     """Test get_coin_icon with PNG format."""
     client = SideShiftClient()
-    mock_response = Mock()
-    mock_response.status_code = 200
-    mock_response.content = b"\x89PNG..."
 
-    with patch.object(client._session, "get", return_value=mock_response):
-        icon = coins.get_coin_icon(client, "btc", format="png")
-        assert icon == b"\x89PNG..."
+    responses.add(
+        responses.GET,
+        f"{client.base_url}/coins/icon/btc",
+        body=b"\x89PNG...",
+        status=200,
+        content_type="image/png",
+    )
+
+    icon = coins.get_coin_icon(client, "btc", format="png")
+    assert icon == b"\x89PNG..."
 
 
+@responses.activate
 def test_get_coin_icon_error():
     """Test get_coin_icon with error response."""
     client = SideShiftClient()
-    mock_response = Mock()
-    mock_response.status_code = 400
-    mock_response.json.return_value = {"message": "Bad request"}
 
-    with patch.object(client._session, "get", return_value=mock_response):
-        with pytest.raises(SideShiftAPIError):
-            coins.get_coin_icon(client, "invalid-coin")
+    responses.add(
+        responses.GET,
+        f"{client.base_url}/coins/icon/invalid-coin",
+        json={"message": "Bad request"},
+        status=400,
+    )
+
+    with pytest.raises(SideShiftAPIError):
+        coins.get_coin_icon(client, "invalid-coin")
 
 
+@responses.activate
 def test_get_pairs():
     """Test get_pairs endpoint."""
     client = SideShiftClient(secret="test-secret", affiliate_id="test-affiliate")
@@ -376,13 +472,20 @@ def test_get_pairs():
         },
     ]
 
-    with patch.object(client, "get", return_value=mock_response):
-        pairs_list = pairs.get_pairs(client, pairs=["btc", "eth"])
-        assert len(pairs_list) == 2
-        assert pairs_list[0].deposit_coin == "btc"
-        assert pairs_list[1].deposit_coin == "eth"
+    responses.add(
+        responses.GET,
+        f"{client.base_url}/pairs",
+        json=mock_response,
+        status=200,
+    )
+
+    pairs_list = pairs.get_pairs(client, pairs=["btc", "eth"])
+    assert len(pairs_list) == 2
+    assert pairs_list[0].deposit_coin == "btc"
+    assert pairs_list[1].deposit_coin == "eth"
 
 
+@responses.activate
 def test_get_pair_with_amount():
     """Test get_pair with amount parameter."""
     client = SideShiftClient(secret="test-secret", affiliate_id="test-affiliate")
@@ -397,11 +500,19 @@ def test_get_pair_with_amount():
         "settleNetwork": "mainnet",
     }
 
-    with patch.object(client, "get", return_value=mock_response):
-        pair = pairs.get_pair(client, from_coin="btc", to_coin="eth", amount=1000.0)
-        assert pair.rate == "15.5"
+    responses.add(
+        responses.GET,
+        f"{client.base_url}/pair/btc/eth",
+        json=mock_response,
+        status=200,
+        match=[responses.matchers.query_param_matcher({"amount": "1000.0", "affiliateId": "test-affiliate"})],
+    )
+
+    pair = pairs.get_pair(client, from_coin="btc", to_coin="eth", amount=1000.0)
+    assert pair.rate == "15.5"
 
 
+@responses.activate
 def test_get_pair_with_commission_rate():
     """Test get_pair with commission_rate parameter."""
     client = SideShiftClient(secret="test-secret", affiliate_id="test-affiliate")
@@ -416,11 +527,19 @@ def test_get_pair_with_commission_rate():
         "settleNetwork": "mainnet",
     }
 
-    with patch.object(client, "get", return_value=mock_response):
-        pair = pairs.get_pair(client, from_coin="btc", to_coin="eth", commission_rate="1.0")
-        assert pair.rate == "15.5"
+    responses.add(
+        responses.GET,
+        f"{client.base_url}/pair/btc/eth",
+        json=mock_response,
+        status=200,
+        match=[responses.matchers.query_param_matcher({"commissionRate": "1.0", "affiliateId": "test-affiliate"})],
+    )
+
+    pair = pairs.get_pair(client, from_coin="btc", to_coin="eth", commission_rate="1.0")
+    assert pair.rate == "15.5"
 
 
+@responses.activate
 def test_request_quote_with_settle_amount():
     """Test request_quote with settle_amount instead of deposit_amount."""
     client = SideShiftClient(secret="test-secret", affiliate_id="test-affiliate")
@@ -438,16 +557,23 @@ def test_request_quote_with_settle_amount():
         "rate": "15.0",
     }
 
-    with patch.object(client, "post", return_value=mock_response):
-        quote = quotes.request_quote(
-            client,
-            deposit_coin="btc",
-            settle_coin="eth",
-            settle_amount="1.5",
-        )
-        assert quote.id == "test-quote-id"
+    responses.add(
+        responses.POST,
+        f"{client.base_url}/quotes",
+        json=mock_response,
+        status=200,
+    )
+
+    quote = quotes.request_quote(
+        client,
+        deposit_coin="btc",
+        settle_coin="eth",
+        settle_amount="1.5",
+    )
+    assert quote.id == "test-quote-id"
 
 
+@responses.activate
 def test_request_quote_with_user_ip():
     """Test request_quote with user_ip parameter."""
     client = SideShiftClient(secret="test-secret", affiliate_id="test-affiliate")
@@ -465,17 +591,24 @@ def test_request_quote_with_user_ip():
         "rate": "15.0",
     }
 
-    with patch.object(client, "post", return_value=mock_response):
-        quote = quotes.request_quote(
-            client,
-            deposit_coin="btc",
-            settle_coin="eth",
-            deposit_amount="0.1",
-            user_ip="1.2.3.4",
-        )
-        assert quote.id == "test-quote-id"
+    responses.add(
+        responses.POST,
+        f"{client.base_url}/quotes",
+        json=mock_response,
+        status=200,
+    )
+
+    quote = quotes.request_quote(
+        client,
+        deposit_coin="btc",
+        settle_coin="eth",
+        deposit_amount="0.1",
+        user_ip="1.2.3.4",
+    )
+    assert quote.id == "test-quote-id"
 
 
+@responses.activate
 def test_set_refund_address():
     """Test set_refund_address endpoint."""
     client = SideShiftClient(secret="test-secret")
@@ -493,11 +626,18 @@ def test_set_refund_address():
         "status": "waiting",
     }
 
-    with patch.object(client, "post", return_value=mock_response):
-        shift = shifts.set_refund_address(client, shift_id="test-shift-id", address="bc1q...")
-        assert shift.refund_address == "bc1q..."
+    responses.add(
+        responses.POST,
+        f"{client.base_url}/shifts/test-shift-id/set-refund-address",
+        json=mock_response,
+        status=200,
+    )
+
+    shift = shifts.set_refund_address(client, shift_id="test-shift-id", address="bc1q...")
+    assert shift.refund_address == "bc1q..."
 
 
+@responses.activate
 def test_set_refund_address_with_memo():
     """Test set_refund_address with memo."""
     client = SideShiftClient(secret="test-secret")
@@ -516,24 +656,36 @@ def test_set_refund_address_with_memo():
         "status": "waiting",
     }
 
-    with patch.object(client, "post", return_value=mock_response):
-        shift = shifts.set_refund_address(
-            client, shift_id="test-shift-id", address="bc1q...", memo="12345"
-        )
-        assert shift.refund_memo == "12345"
+    responses.add(
+        responses.POST,
+        f"{client.base_url}/shifts/test-shift-id/set-refund-address",
+        json=mock_response,
+        status=200,
+    )
+
+    shift = shifts.set_refund_address(
+        client, shift_id="test-shift-id", address="bc1q...", memo="12345"
+    )
+    assert shift.refund_memo == "12345"
 
 
+@responses.activate
 def test_cancel_order():
     """Test cancel_order endpoint."""
     client = SideShiftClient(secret="test-secret")
 
-    mock_response = {}  # 204 No Content
+    responses.add(
+        responses.POST,
+        f"{client.base_url}/cancel-order",
+        body="",
+        status=204,
+    )
 
-    with patch.object(client, "post", return_value=mock_response):
-        shifts.cancel_order(client, order_id="test-order-id")
-        # Should not raise
+    shifts.cancel_order(client, order_id="test-order-id")
+    # Should not raise
 
 
+@responses.activate
 def test_get_checkout():
     """Test get_checkout endpoint."""
     client = SideShiftClient()
@@ -551,12 +703,19 @@ def test_get_checkout():
         "cancelUrl": "https://example.com/cancel",
     }
 
-    with patch.object(client, "get", return_value=mock_response):
-        checkout_obj = checkout.get_checkout(client, checkout_id="test-checkout-id")
-        assert checkout_obj.id == "test-checkout-id"
-        assert checkout_obj.settle_coin == "eth"
+    responses.add(
+        responses.GET,
+        f"{client.base_url}/checkout/test-checkout-id",
+        json=mock_response,
+        status=200,
+    )
+
+    checkout_obj = checkout.get_checkout(client, checkout_id="test-checkout-id")
+    assert checkout_obj.id == "test-checkout-id"
+    assert checkout_obj.settle_coin == "eth"
 
 
+@responses.activate
 def test_create_checkout():
     """Test create_checkout endpoint."""
     client = SideShiftClient(secret="test-secret", affiliate_id="test-affiliate", user_ip="1.2.3.4")
@@ -574,18 +733,24 @@ def test_create_checkout():
         "cancelUrl": "https://example.com/cancel",
     }
 
-    with patch.object(client, "post", return_value=mock_response):
-        checkout_obj = checkout.create_checkout(
-            client,
-            settle_coin="eth",
-            settle_network="mainnet",
-            settle_amount="1.0",
-            settle_address="0x...",
-            affiliate_id="test-affiliate",
-            success_url="https://example.com/success",
-            cancel_url="https://example.com/cancel",
-        )
-        assert checkout_obj.id == "test-checkout-id"
+    responses.add(
+        responses.POST,
+        f"{client.base_url}/checkout",
+        json=mock_response,
+        status=200,
+    )
+
+    checkout_obj = checkout.create_checkout(
+        client,
+        settle_coin="eth",
+        settle_network="mainnet",
+        settle_amount="1.0",
+        settle_address="0x...",
+        affiliate_id="test-affiliate",
+        success_url="https://example.com/success",
+        cancel_url="https://example.com/cancel",
+    )
+    assert checkout_obj.id == "test-checkout-id"
 
 
 def test_create_checkout_missing_user_ip():
@@ -605,6 +770,7 @@ def test_create_checkout_missing_user_ip():
         )
 
 
+@responses.activate
 def test_create_checkout_with_memo():
     """Test create_checkout with settle_memo."""
     client = SideShiftClient(secret="test-secret", affiliate_id="test-affiliate", user_ip="1.2.3.4")
@@ -623,19 +789,25 @@ def test_create_checkout_with_memo():
         "cancelUrl": "https://example.com/cancel",
     }
 
-    with patch.object(client, "post", return_value=mock_response):
-        checkout_obj = checkout.create_checkout(
-            client,
-            settle_coin="eth",
-            settle_network="mainnet",
-            settle_amount="1.0",
-            settle_address="0x...",
-            affiliate_id="test-affiliate",
-            success_url="https://example.com/success",
-            cancel_url="https://example.com/cancel",
-            settle_memo="12345",
-        )
-        assert checkout_obj.settle_memo == "12345"
+    responses.add(
+        responses.POST,
+        f"{client.base_url}/checkout",
+        json=mock_response,
+        status=200,
+    )
+
+    checkout_obj = checkout.create_checkout(
+        client,
+        settle_coin="eth",
+        settle_network="mainnet",
+        settle_amount="1.0",
+        settle_address="0x...",
+        affiliate_id="test-affiliate",
+        success_url="https://example.com/success",
+        cancel_url="https://example.com/cancel",
+        settle_memo="12345",
+    )
+    assert checkout_obj.settle_memo == "12345"
 
 
 # Async tests
@@ -655,7 +827,14 @@ async def test_get_coins_async():
             }
         ]
 
-        with patch.object(client, "get", return_value=mock_response):
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.json.return_value = mock_response
+        mock_http_response.content = b"[]"
+        mock_http_response.headers = {}
+
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             coins_list = await coins.get_coins_async(client)
             assert len(coins_list) == 1
             assert coins_list[0].coin == "btc"
@@ -665,13 +844,13 @@ async def test_get_coins_async():
 async def test_get_coin_icon_async():
     """Test get_coin_icon_async endpoint."""
     async with AsyncSideShiftClient() as client:
-        mock_client = Mock()
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.content = b"<svg>...</svg>"
-        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.content = b"<svg>...</svg>"
+        mock_http_response.headers = {}
 
-        with patch.object(client, "_get_client", return_value=mock_client):
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             icon = await coins.get_coin_icon_async(client, "btc", format="svg")
             assert icon == b"<svg>...</svg>"
 
@@ -690,7 +869,14 @@ async def test_get_pair_async():
             "settleNetwork": "mainnet",
         }
 
-        with patch.object(client, "get", return_value=mock_response):
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.json.return_value = mock_response
+        mock_http_response.content = b"{}"
+        mock_http_response.headers = {}
+
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             pair = await pairs.get_pair_async(client, from_coin="btc", to_coin="eth")
             assert pair.rate == "15.5"
 
@@ -711,7 +897,14 @@ async def test_get_pairs_async():
             }
         ]
 
-        with patch.object(client, "get", return_value=mock_response):
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.json.return_value = mock_response
+        mock_http_response.content = b"[]"
+        mock_http_response.headers = {}
+
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             pairs_list = await pairs.get_pairs_async(client, pairs=["btc", "eth"])
             assert len(pairs_list) == 1
 
@@ -733,7 +926,14 @@ async def test_request_quote_async():
             "rate": "15.0",
         }
 
-        with patch.object(client, "post", return_value=mock_response):
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.json.return_value = mock_response
+        mock_http_response.content = b"{}"
+        mock_http_response.headers = {}
+
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             quote = await quotes.request_quote_async(
                 client,
                 deposit_coin="btc",
@@ -759,7 +959,14 @@ async def test_get_shift_async():
             "status": "complete",
         }
 
-        with patch.object(client, "get", return_value=mock_response):
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.json.return_value = mock_response
+        mock_http_response.content = b"{}"
+        mock_http_response.headers = {}
+
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             shift = await shifts.get_shift_async(client, shift_id="test-shift-id")
             assert shift.id == "test-shift-id"
 
@@ -782,7 +989,14 @@ async def test_get_bulk_shifts_async():
             }
         ]
 
-        with patch.object(client, "get", return_value=mock_response):
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.json.return_value = mock_response
+        mock_http_response.content = b"[]"
+        mock_http_response.headers = {}
+
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             shifts_list = await shifts.get_bulk_shifts_async(client, shift_ids=["shift-1"])
             assert len(shifts_list) == 1
 
@@ -803,7 +1017,14 @@ async def test_get_recent_shifts_async():
             }
         ]
 
-        with patch.object(client, "get", return_value=mock_response):
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.json.return_value = mock_response
+        mock_http_response.content = b"[]"
+        mock_http_response.headers = {}
+
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             recent = await shifts.get_recent_shifts_async(client, limit=10)
             assert len(recent) == 1
 
@@ -825,7 +1046,14 @@ async def test_create_fixed_shift_async():
             "status": "waiting",
         }
 
-        with patch.object(client, "post", return_value=mock_response):
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.json.return_value = mock_response
+        mock_http_response.content = b"{}"
+        mock_http_response.headers = {}
+
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             shift = await shifts.create_fixed_shift_async(
                 client,
                 quote_id="test-quote-id",
@@ -851,7 +1079,14 @@ async def test_create_variable_shift_async():
             "status": "waiting",
         }
 
-        with patch.object(client, "post", return_value=mock_response):
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.json.return_value = mock_response
+        mock_http_response.content = b"{}"
+        mock_http_response.headers = {}
+
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             shift = await shifts.create_variable_shift_async(
                 client,
                 deposit_coin="btc",
@@ -878,7 +1113,14 @@ async def test_set_refund_address_async():
             "status": "waiting",
         }
 
-        with patch.object(client, "post", return_value=mock_response):
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.json.return_value = mock_response
+        mock_http_response.content = b"{}"
+        mock_http_response.headers = {}
+
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             shift = await shifts.set_refund_address_async(
                 client, shift_id="test-shift-id", address="bc1q..."
             )
@@ -889,9 +1131,14 @@ async def test_set_refund_address_async():
 async def test_cancel_order_async():
     """Test cancel_order_async endpoint."""
     async with AsyncSideShiftClient(secret="test-secret") as client:
-        mock_response = {}
+        mock_http_response = Mock()
+        mock_http_response.status_code = 204
+        mock_http_response.json.return_value = {}
+        mock_http_response.content = b"{}"
+        mock_http_response.headers = {}
 
-        with patch.object(client, "post", return_value=mock_response):
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             await shifts.cancel_order_async(client, order_id="test-order-id")
             # Should not raise
 
@@ -909,7 +1156,14 @@ async def test_get_account_async():
             "totalBalance": "100.0",
         }
 
-        with patch.object(client, "get", return_value=mock_response):
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.json.return_value = mock_response
+        mock_http_response.content = b"{}"
+        mock_http_response.headers = {}
+
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             account_info = await account.get_account_async(client)
             assert account_info.id == "test-account-id"
 
@@ -920,7 +1174,14 @@ async def test_get_permissions_async():
     async with AsyncSideShiftClient(user_ip="1.2.3.4") as client:
         mock_response = {"createShift": True}
 
-        with patch.object(client, "get", return_value=mock_response):
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.json.return_value = mock_response
+        mock_http_response.content = b"{}"
+        mock_http_response.headers = {}
+
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             permissions = await account.get_permissions_async(client)
             assert permissions.create_shift is True
 
@@ -944,7 +1205,14 @@ async def test_get_xai_stats_async():
             "svxaiPriceXai": "1.05",
         }
 
-        with patch.object(client, "get", return_value=mock_response):
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.json.return_value = mock_response
+        mock_http_response.content = b"{}"
+        mock_http_response.headers = {}
+
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             stats = await account.get_xai_stats_async(client)
             assert stats.total_supply == 1000000
 
@@ -966,7 +1234,14 @@ async def test_get_checkout_async():
             "cancelUrl": "https://example.com/cancel",
         }
 
-        with patch.object(client, "get", return_value=mock_response):
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.json.return_value = mock_response
+        mock_http_response.content = b"{}"
+        mock_http_response.headers = {}
+
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             checkout_obj = await checkout.get_checkout_async(client, checkout_id="test-checkout-id")
             assert checkout_obj.id == "test-checkout-id"
 
@@ -990,7 +1265,14 @@ async def test_create_checkout_async():
             "cancelUrl": "https://example.com/cancel",
         }
 
-        with patch.object(client, "post", return_value=mock_response):
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.json.return_value = mock_response
+        mock_http_response.content = b"{}"
+        mock_http_response.headers = {}
+
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_http_response
             checkout_obj = await checkout.create_checkout_async(
                 client,
                 settle_coin="eth",
