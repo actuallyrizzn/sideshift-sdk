@@ -299,6 +299,56 @@ class TestStateEdgeCases:
             pass
         # Client should still be properly closed
 
+    @pytest.mark.asyncio
+    async def test_async_context_manager_cleanup_error_preserves_original_exception(self, async_client):
+        """Test that cleanup errors don't mask original exceptions."""
+        # Mock close() to raise an error
+        original_close = async_client.close
+        cleanup_error_raised = False
+        
+        async def failing_close():
+            nonlocal cleanup_error_raised
+            cleanup_error_raised = True
+            raise RuntimeError("Cleanup failed")
+        
+        async_client.close = failing_close
+        
+        # If an exception occurs in the context body, it should be preserved
+        # even if cleanup also fails
+        try:
+            async with async_client:
+                raise ValueError("Original exception")
+        except ValueError as e:
+            assert str(e) == "Original exception"
+            assert cleanup_error_raised  # Cleanup was attempted
+        except RuntimeError:
+            # Cleanup error should not be raised if there was an original exception
+            pytest.fail("Cleanup error should not mask original exception")
+        finally:
+            async_client.close = original_close
+
+    @pytest.mark.asyncio
+    async def test_async_context_manager_cleanup_error_raises_if_no_original_exception(self, async_client):
+        """Test that cleanup errors are raised if no original exception occurred."""
+        # Mock close() to raise an error
+        original_close = async_client.close
+        
+        async def failing_close():
+            raise RuntimeError("Cleanup failed")
+        
+        async_client.close = failing_close
+        
+        # If no exception occurs in the context body, cleanup error should be raised
+        try:
+            async with async_client:
+                pass  # No exception
+        except RuntimeError as e:
+            assert str(e) == "Cleanup failed"
+        else:
+            pytest.fail("Cleanup error should be raised when no original exception")
+        finally:
+            async_client.close = original_close
+
 
 class TestDataEdgeCases:
     """Test edge cases with data handling."""

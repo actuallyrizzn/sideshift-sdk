@@ -844,12 +844,34 @@ class SideShiftClient(BaseClient):
         Automatically closes the HTTP session when exiting the context.
         This ensures proper cleanup of network resources.
 
+        If an error occurs during cleanup, it is logged but does not suppress
+        exceptions that occurred in the context body. If both a context body
+        exception and a cleanup exception occur, the context body exception
+        takes precedence.
+
         Args:
-            exc_type: Exception type if an exception occurred
-            exc_val: Exception value if an exception occurred
-            exc_tb: Exception traceback if an exception occurred
+            exc_type: Exception type if an exception occurred in the context body
+            exc_val: Exception value if an exception occurred in the context body
+            exc_tb: Exception traceback if an exception occurred in the context body
+
+        Returns:
+            None (exceptions are not suppressed)
         """
-        self.close()
+        try:
+            self.close()
+        except Exception as cleanup_error:
+            # Log the cleanup error but don't suppress the original exception
+            if self._enable_logging:
+                self._logger.error(
+                    f"Error during context manager cleanup: {cleanup_error}",
+                    exc_info=True,
+                )
+            # If there was an exception in the context body, preserve it
+            # If there wasn't, raise the cleanup error
+            if exc_type is None:
+                raise
+            # If both exist, log the cleanup error but let the original propagate
+            # This follows Python's context manager protocol best practices
 
 
 class AsyncSideShiftClient(BaseClient):
@@ -1272,9 +1294,31 @@ class AsyncSideShiftClient(BaseClient):
         Automatically closes the async HTTP client when exiting the context.
         This ensures proper cleanup of network resources and connection pools.
 
+        If an error occurs during cleanup, it is logged but does not suppress
+        exceptions that occurred in the context body. If both a context body
+        exception and a cleanup exception occur, the context body exception
+        takes precedence.
+
         Args:
-            exc_type: Exception type if an exception occurred
-            exc_val: Exception value if an exception occurred
-            exc_tb: Exception traceback if an exception occurred
+            exc_type: Exception type if an exception occurred in the context body
+            exc_val: Exception value if an exception occurred in the context body
+            exc_tb: Exception traceback if an exception occurred in the context body
+
+        Returns:
+            None (exceptions are not suppressed)
         """
-        await self.close()
+        try:
+            await self.close()
+        except Exception as cleanup_error:
+            # Log the cleanup error but don't suppress the original exception
+            if self._enable_logging:
+                self._logger.error(
+                    f"Error during async context manager cleanup: {cleanup_error}",
+                    exc_info=True,
+                )
+            # If there was an exception in the context body, preserve it
+            # If there wasn't, raise the cleanup error
+            if exc_type is None:
+                raise
+            # If both exist, log the cleanup error but let the original propagate
+            # This follows Python's context manager protocol best practices
