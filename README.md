@@ -248,7 +248,10 @@ mypy sideshift_sdk
 
 ## License
 
-MIT
+This repository uses dual licensing:
+
+- **Code**: Licensed under the [GNU Affero General Public License v3.0 (AGPLv3)](LICENSE). See the [LICENSE](LICENSE) file for details.
+- **Documentation and other non-code content**: Licensed under the [Creative Commons Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0)](LICENSE-DOCS). See the [LICENSE-DOCS](LICENSE-DOCS) file for details.
 
 ## Support
 
