@@ -6,7 +6,6 @@ from typing import Any
 
 import httpx
 import requests
-from pydantic import BaseModel
 
 from sideshift_sdk.exceptions import (
     SideShiftAPIError,

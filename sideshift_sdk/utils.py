@@ -1,7 +1,6 @@
 """Utility functions for SideShift SDK."""
 
 import time
-from typing import Any
 
 
 def handle_rate_limit(retry_after: int | None = None) -> None:
