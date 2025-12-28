@@ -60,17 +60,11 @@ def get_coin_icon(
     accept_header = f"image/{format}+xml" if format == IMAGE_FORMAT_SVG else f"image/{format}"
     headers = {HEADER_ACCEPT: accept_header}
 
-    response = client._session.get(
-        f"{client.base_url}/coins/icon/{coin_network}",
+    return client.get_binary(
+        f"/coins/icon/{coin_network}",
         headers=headers,
-        timeout=client.timeout,
+        require_auth=False,
     )
-
-    if response.status_code != 200:
-        client._handle_response(response)
-        return b""  # Should not reach here, but satisfy type checker
-
-    return response.content
 
 
 async def get_coin_icon_async(
@@ -91,14 +85,8 @@ async def get_coin_icon_async(
     accept_header = f"image/{format}+xml" if format == IMAGE_FORMAT_SVG else f"image/{format}"
     headers = {HEADER_ACCEPT: accept_header}
 
-    httpx_client = await client._get_client()
-    response = await httpx_client.get(
-        f"{client.base_url}/coins/icon/{coin_network}",
+    return await client.get_binary(
+        f"/coins/icon/{coin_network}",
         headers=headers,
+        require_auth=False,
     )
-
-    if response.status_code != 200:
-        client._handle_response(response)
-        return b""  # Should not reach here, but satisfy type checker
-
-    return response.content

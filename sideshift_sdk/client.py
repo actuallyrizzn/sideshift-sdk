@@ -305,6 +305,43 @@ class SideShiftClient(BaseClient):
             require_user_ip=require_user_ip,
         )
 
+    def get_binary(
+        self,
+        endpoint: str,
+        headers: HeadersDict | None = None,
+        require_auth: bool = False,
+        require_user_ip: bool = False,
+    ) -> bytes:
+        """Make GET request and return binary response.
+
+        Args:
+            endpoint: API endpoint
+            headers: Additional headers
+            require_auth: Whether authentication is required
+            require_user_ip: Whether user IP header is required
+
+        Returns:
+            Response binary data
+        """
+        url = f"{self.base_url}{endpoint}"
+        request_headers = self._get_headers(
+            include_secret=require_auth, include_user_ip=require_user_ip
+        )
+        if headers:
+            request_headers.update(headers)
+
+        response = self._session.get(
+            url,
+            headers=request_headers,
+            timeout=self.timeout,
+        )
+
+        if response.status_code != 200:
+            self._handle_response(response)
+            return b""
+
+        return response.content
+
     def close(self) -> None:
         """Close the session."""
         self._session.close()
@@ -444,6 +481,44 @@ class AsyncSideShiftClient(BaseClient):
             require_auth=require_auth,
             require_user_ip=require_user_ip,
         )
+
+    async def get_binary(
+        self,
+        endpoint: str,
+        headers: HeadersDict | None = None,
+        require_auth: bool = False,
+        require_user_ip: bool = False,
+    ) -> bytes:
+        """Make GET request and return binary response.
+
+        Args:
+            endpoint: API endpoint
+            headers: Additional headers
+            require_auth: Whether authentication is required
+            require_user_ip: Whether user IP header is required
+
+        Returns:
+            Response binary data
+        """
+        url = f"{self.base_url}{endpoint}"
+        request_headers = self._get_headers(
+            include_secret=require_auth, include_user_ip=require_user_ip
+        )
+        if headers:
+            request_headers.update(headers)
+
+        client = await self._get_client()
+        response = await client.get(
+            url,
+            headers=request_headers,
+            timeout=self.timeout,
+        )
+
+        if response.status_code != 200:
+            self._handle_response(response)
+            return b""
+
+        return response.content
 
     async def post(
         self,
