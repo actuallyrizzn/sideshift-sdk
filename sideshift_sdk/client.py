@@ -1,7 +1,9 @@
 """Client classes for SideShift SDK."""
 
+import inspect
 import os
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
@@ -27,6 +29,14 @@ from sideshift_sdk.exceptions import (
 )
 from sideshift_sdk.logging_config import get_logger
 from sideshift_sdk.utils import exponential_backoff
+
+# Type aliases for hooks
+RequestHook = Callable[[str, str, dict | None, dict | None, dict | None], None]
+ResponseHook = Callable[[str, str, dict], None]
+ErrorHook = Callable[[Exception, str, str], None]
+AsyncRequestHook = Callable[[str, str, dict | None, dict | None, dict | None], Awaitable[None]]
+AsyncResponseHook = Callable[[str, str, dict], Awaitable[None]]
+AsyncErrorHook = Callable[[Exception, str, str], Awaitable[None]]
 
 
 class BaseClient:
@@ -67,6 +77,11 @@ class BaseClient:
             import logging
             from sideshift_sdk.logging_config import configure_logging
             configure_logging(level=log_level)
+        
+        # Middleware hooks
+        self._request_hooks: list[RequestHook | AsyncRequestHook] = []
+        self._response_hooks: list[ResponseHook | AsyncResponseHook] = []
+        self._error_hooks: list[ErrorHook | AsyncErrorHook] = []
 
     def _get_headers(
         self, include_secret: bool = False, include_user_ip: bool = False
@@ -92,6 +107,60 @@ class BaseClient:
             headers[HEADER_USER_IP] = self.user_ip
 
         return headers
+
+    def add_request_hook(self, hook: RequestHook | AsyncRequestHook) -> None:
+        """Add a request hook that will be called before each request.
+
+        Args:
+            hook: Callable that receives (method, endpoint, params, json_data, headers)
+                  For async clients, hook can be async and will be awaited
+        """
+        self._request_hooks.append(hook)
+
+    def add_response_hook(self, hook: ResponseHook | AsyncResponseHook) -> None:
+        """Add a response hook that will be called after each successful request.
+
+        Args:
+            hook: Callable that receives (method, endpoint, response_data)
+                  For async clients, hook can be async and will be awaited
+        """
+        self._response_hooks.append(hook)
+
+    def add_error_hook(self, hook: ErrorHook | AsyncErrorHook) -> None:
+        """Add an error hook that will be called when an exception occurs.
+
+        Args:
+            hook: Callable that receives (exception, method, endpoint)
+                  For async clients, hook can be async and will be awaited
+        """
+        self._error_hooks.append(hook)
+
+    def remove_request_hook(self, hook: RequestHook | AsyncRequestHook) -> None:
+        """Remove a request hook.
+
+        Args:
+            hook: The hook to remove
+        """
+        if hook in self._request_hooks:
+            self._request_hooks.remove(hook)
+
+    def remove_response_hook(self, hook: ResponseHook | AsyncResponseHook) -> None:
+        """Remove a response hook.
+
+        Args:
+            hook: The hook to remove
+        """
+        if hook in self._response_hooks:
+            self._response_hooks.remove(hook)
+
+    def remove_error_hook(self, hook: ErrorHook | AsyncErrorHook) -> None:
+        """Remove an error hook.
+
+        Args:
+            hook: The hook to remove
+        """
+        if hook in self._error_hooks:
+            self._error_hooks.remove(hook)
 
     def _handle_response(self, response: requests.Response | httpx.Response) -> JsonDict:
         """Handle HTTP response and raise appropriate exceptions.
@@ -240,6 +309,22 @@ class SideShiftClient(BaseClient):
 
         for attempt in range(max_retries + 1):
             try:
+                if self._enable_logging:
+                    self._logger.debug(
+                        f"Request: {method} {endpoint} (attempt {attempt + 1}/{max_retries + 1})"
+                    )
+                    if params:
+                        self._logger.debug(f"  Params: {params}")
+                
+                # Call request hooks
+                for hook in self._request_hooks:
+                    try:
+                        hook(method, endpoint, params, json_data, request_headers)
+                    except Exception as hook_error:
+                        # Don't let hook errors break the request
+                        if self._enable_logging:
+                            self._logger.warning(f"Request hook error: {hook_error}")
+                
                 response = self._session.request(
                     method=method,
                     url=url,
@@ -249,7 +334,21 @@ class SideShiftClient(BaseClient):
                     timeout=self.timeout,
                 )
 
-                return self._handle_response(response)
+                if self._enable_logging:
+                    self._logger.debug(f"Response: {method} {endpoint} - {response.status_code}")
+
+                response_data = self._handle_response(response)
+                
+                # Call response hooks
+                for hook in self._response_hooks:
+                    try:
+                        hook(method, endpoint, response_data)
+                    except Exception as hook_error:
+                        # Don't let hook errors break the response
+                        if self._enable_logging:
+                            self._logger.warning(f"Response hook error: {hook_error}")
+                
+                return response_data
 
             except SideShiftRateLimitError:
                 if self._enable_logging:
@@ -268,10 +367,39 @@ class SideShiftClient(BaseClient):
                 error_msg = f"Network error: {str(e)}"
                 if isinstance(e, requests.exceptions.Timeout):
                     error_msg = f"Request timeout after {self.timeout} seconds"
-                raise SideShiftNetworkError(error_msg) from e
+                if self._enable_logging:
+                    self._logger.error(f"Network error for {method} {endpoint}: {error_msg}")
+                network_error = SideShiftNetworkError(error_msg)
+                # Call error hooks
+                for hook in self._error_hooks:
+                    try:
+                        hook(network_error, method, endpoint)
+                    except Exception as hook_error:
+                        if self._enable_logging:
+                            self._logger.warning(f"Error hook error: {hook_error}")
+                raise network_error from e
             except requests.exceptions.RequestException as e:
                 # Other requests exceptions (DNS, SSL, etc.)
-                raise SideShiftNetworkError(f"Network request failed: {str(e)}") from e
+                if self._enable_logging:
+                    self._logger.error(f"Request exception for {method} {endpoint}: {str(e)}")
+                network_error = SideShiftNetworkError(f"Network request failed: {str(e)}")
+                # Call error hooks
+                for hook in self._error_hooks:
+                    try:
+                        hook(network_error, method, endpoint)
+                    except Exception as hook_error:
+                        if self._enable_logging:
+                            self._logger.warning(f"Error hook error: {hook_error}")
+                raise network_error from e
+            except SideShiftException as e:
+                # Call error hooks for SDK exceptions
+                for hook in self._error_hooks:
+                    try:
+                        hook(e, method, endpoint)
+                    except Exception as hook_error:
+                        if self._enable_logging:
+                            self._logger.warning(f"Error hook error: {hook_error}")
+                raise
 
     def get(
         self,
@@ -456,6 +584,25 @@ class AsyncSideShiftClient(BaseClient):
 
         for attempt in range(max_retries + 1):
             try:
+                if self._enable_logging:
+                    self._logger.debug(
+                        f"Request: {method} {endpoint} (attempt {attempt + 1}/{max_retries + 1})"
+                    )
+                    if params:
+                        self._logger.debug(f"  Params: {params}")
+                
+                # Call request hooks (support both sync and async)
+                for hook in self._request_hooks:
+                    try:
+                        if inspect.iscoroutinefunction(hook):
+                            await hook(method, endpoint, params, json_data, request_headers)
+                        else:
+                            hook(method, endpoint, params, json_data, request_headers)
+                    except Exception as hook_error:
+                        # Don't let hook errors break the request
+                        if self._enable_logging:
+                            self._logger.warning(f"Request hook error: {hook_error}")
+                
                 response = await client.request(
                     method=method,
                     url=url,
@@ -465,7 +612,24 @@ class AsyncSideShiftClient(BaseClient):
                     timeout=self.timeout,
                 )
 
-                return self._handle_response(response)
+                if self._enable_logging:
+                    self._logger.debug(f"Response: {method} {endpoint} - {response.status_code}")
+
+                response_data = self._handle_response(response)
+                
+                # Call response hooks (support both sync and async)
+                for hook in self._response_hooks:
+                    try:
+                        if inspect.iscoroutinefunction(hook):
+                            await hook(method, endpoint, response_data)
+                        else:
+                            hook(method, endpoint, response_data)
+                    except Exception as hook_error:
+                        # Don't let hook errors break the response
+                        if self._enable_logging:
+                            self._logger.warning(f"Response hook error: {hook_error}")
+                
+                return response_data
 
             except SideShiftRateLimitError:
                 if self._enable_logging:
@@ -484,10 +648,48 @@ class AsyncSideShiftClient(BaseClient):
                 error_msg = f"Network error: {str(e)}"
                 if isinstance(e, httpx.TimeoutException):
                     error_msg = f"Request timeout after {self.timeout} seconds"
-                raise SideShiftNetworkError(error_msg) from e
+                if self._enable_logging:
+                    self._logger.error(f"Network error for {method} {endpoint}: {error_msg}")
+                network_error = SideShiftNetworkError(error_msg)
+                # Call error hooks (support both sync and async)
+                for hook in self._error_hooks:
+                    try:
+                        if inspect.iscoroutinefunction(hook):
+                            await hook(network_error, method, endpoint)
+                        else:
+                            hook(network_error, method, endpoint)
+                    except Exception as hook_error:
+                        if self._enable_logging:
+                            self._logger.warning(f"Error hook error: {hook_error}")
+                raise network_error from e
             except httpx.RequestError as e:
                 # Other httpx request exceptions (DNS, SSL, etc.)
-                raise SideShiftNetworkError(f"Network request failed: {str(e)}") from e
+                if self._enable_logging:
+                    self._logger.error(f"Request exception for {method} {endpoint}: {str(e)}")
+                network_error = SideShiftNetworkError(f"Network request failed: {str(e)}")
+                # Call error hooks (support both sync and async)
+                for hook in self._error_hooks:
+                    try:
+                        if inspect.iscoroutinefunction(hook):
+                            await hook(network_error, method, endpoint)
+                        else:
+                            hook(network_error, method, endpoint)
+                    except Exception as hook_error:
+                        if self._enable_logging:
+                            self._logger.warning(f"Error hook error: {hook_error}")
+                raise network_error from e
+            except SideShiftException as e:
+                # Call error hooks for SDK exceptions (support both sync and async)
+                for hook in self._error_hooks:
+                    try:
+                        if inspect.iscoroutinefunction(hook):
+                            await hook(e, method, endpoint)
+                        else:
+                            hook(e, method, endpoint)
+                    except Exception as hook_error:
+                        if self._enable_logging:
+                            self._logger.warning(f"Error hook error: {hook_error}")
+                raise
 
     async def get(
         self,
