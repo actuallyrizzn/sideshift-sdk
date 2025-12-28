@@ -1,5 +1,6 @@
 """Client classes for SideShift SDK."""
 
+import asyncio
 import inspect
 import os
 import time
