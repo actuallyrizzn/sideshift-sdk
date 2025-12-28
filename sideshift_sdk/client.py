@@ -98,6 +98,16 @@ class BaseClient:
             secret = os.getenv("SIDESHIFT_SECRET")
         self.secret = secret
 
+    def __repr__(self) -> str:
+        """String representation that doesn't expose secrets."""
+        secret_display = "***" if self.secret else None
+        return (
+            f"{self.__class__.__name__}("
+            f"secret={secret_display}, "
+            f"affiliate_id={self.affiliate_id}, "
+            f"base_url={self.base_url})"
+        )
+
     def _get_headers(
         self, include_secret: bool = False, include_user_ip: bool = False
     ) -> HeadersDict:
