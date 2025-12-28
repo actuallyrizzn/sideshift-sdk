@@ -114,12 +114,12 @@ class Quote(BaseModel):
     """Quote response from POST /quotes."""
 
     id: str = Field(..., min_length=1)
-    created_at: str = Field(..., alias="createdAt", min_length=1)
+    created_at: datetime = Field(..., alias="createdAt")
     deposit_coin: str = Field(..., alias="depositCoin", min_length=1)
     settle_coin: str = Field(..., alias="settleCoin", min_length=1)
     deposit_network: str = Field(..., alias="depositNetwork", min_length=1)
     settle_network: str = Field(..., alias="settleNetwork", min_length=1)
-    expires_at: str = Field(..., alias="expiresAt", min_length=1)
+    expires_at: datetime = Field(..., alias="expiresAt")
     deposit_amount: str = Field(..., alias="depositAmount", min_length=1)
     settle_amount: str = Field(..., alias="settleAmount", min_length=1)
     rate: str = Field(..., min_length=1)
@@ -190,7 +190,7 @@ class Shift(BaseModel):
     """Shift information from GET /shifts/:shiftId or POST /shifts/fixed or POST /shifts/variable."""
 
     id: str = Field(..., min_length=1)
-    created_at: str = Field(..., alias="createdAt", min_length=1)
+    created_at: datetime = Field(..., alias="createdAt")
     deposit_coin: str = Field(..., alias="depositCoin", min_length=1)
     settle_coin: str = Field(..., alias="settleCoin", min_length=1)
     deposit_network: str = Field(..., alias="depositNetwork", min_length=1)
@@ -207,7 +207,7 @@ class Shift(BaseModel):
     quote_id: str | None = Field(None, alias="quoteId", min_length=1)
     deposit_amount: str | None = Field(None, alias="depositAmount", min_length=1)
     settle_amount: str | None = Field(None, alias="settleAmount", min_length=1)
-    expires_at: str | None = Field(None, alias="expiresAt", min_length=1)
+    expires_at: datetime | None = Field(None, alias="expiresAt")
     status: str = Field(..., min_length=1)
     average_shift_seconds: str | None = Field(None, alias="averageShiftSeconds", min_length=1)
     external_id: str | None = Field(None, alias="externalId", min_length=1)
@@ -221,7 +221,7 @@ class Shift(BaseModel):
 class RecentShift(BaseModel):
     """Recent shift information from GET /recent-shifts."""
 
-    created_at: str = Field(..., alias="createdAt", min_length=1)
+    created_at: datetime = Field(..., alias="createdAt")
     deposit_coin: str = Field(..., alias="depositCoin", min_length=1)
     deposit_network: str = Field(..., alias="depositNetwork", min_length=1)
     deposit_amount: str | None = Field(None, alias="depositAmount", min_length=1)
