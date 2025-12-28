@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ============================================================================
@@ -78,6 +78,13 @@ class QuoteRequest(BaseModel):
     settle_amount: str | None = Field(None, alias="settleAmount")
     affiliate_id: str = Field(..., alias="affiliateId")
     commission_rate: str | None = Field(None, alias="commissionRate")
+
+    @model_validator(mode="after")
+    def validate_amounts(self) -> "QuoteRequest":
+        """Validate that either deposit_amount or settle_amount is provided."""
+        if not self.deposit_amount and not self.settle_amount:
+            raise ValueError("Either deposit_amount or settle_amount must be provided")
+        return self
 
     class Config:
         populate_by_name = True

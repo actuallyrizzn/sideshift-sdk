@@ -1,6 +1,6 @@
 """Tests for endpoint functions."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -537,9 +537,9 @@ def test_get_checkout():
     }
 
     with patch.object(client, "get", return_value=mock_response):
-        checkout = checkout.get_checkout(client, checkout_id="test-checkout-id")
-        assert checkout.id == "test-checkout-id"
-        assert checkout.settle_coin == "eth"
+        checkout_obj = checkout.get_checkout(client, checkout_id="test-checkout-id")
+        assert checkout_obj.id == "test-checkout-id"
+        assert checkout_obj.settle_coin == "eth"
 
 
 def test_create_checkout():
@@ -560,7 +560,7 @@ def test_create_checkout():
     }
 
     with patch.object(client, "post", return_value=mock_response):
-        checkout = checkout.create_checkout(
+        checkout_obj = checkout.create_checkout(
             client,
             settle_coin="eth",
             settle_network="mainnet",
@@ -570,7 +570,7 @@ def test_create_checkout():
             success_url="https://example.com/success",
             cancel_url="https://example.com/cancel",
         )
-        assert checkout.id == "test-checkout-id"
+        assert checkout_obj.id == "test-checkout-id"
 
 
 def test_create_checkout_missing_user_ip():
@@ -609,7 +609,7 @@ def test_create_checkout_with_memo():
     }
 
     with patch.object(client, "post", return_value=mock_response):
-        checkout = checkout.create_checkout(
+        checkout_obj = checkout.create_checkout(
             client,
             settle_coin="eth",
             settle_network="mainnet",
@@ -620,7 +620,7 @@ def test_create_checkout_with_memo():
             cancel_url="https://example.com/cancel",
             settle_memo="12345",
         )
-        assert checkout.settle_memo == "12345"
+        assert checkout_obj.settle_memo == "12345"
 
 
 # Async tests
@@ -654,7 +654,7 @@ async def test_get_coin_icon_async():
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.content = b"<svg>...</svg>"
-        mock_client.get.return_value = mock_response
+        mock_client.get = AsyncMock(return_value=mock_response)
 
         with patch.object(client, "_get_client", return_value=mock_client):
             icon = await coins.get_coin_icon_async(client, "btc", format="svg")

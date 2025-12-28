@@ -81,9 +81,10 @@ class BaseClient:
         """
         status_code = response.status_code
 
+        if status_code == 204:  # No Content
+            return {}
+
         if status_code == 200 or status_code == 201:
-            if status_code == 204:  # No Content
-                return {}
             try:
                 return response.json()
             except Exception:
