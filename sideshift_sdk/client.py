@@ -25,6 +25,7 @@ from sideshift_sdk.exceptions import (
     SideShiftNotFoundError,
     SideShiftRateLimitError,
 )
+from sideshift_sdk.logging_config import get_logger
 from sideshift_sdk.utils import exponential_backoff
 
 
@@ -39,6 +40,8 @@ class BaseClient:
         affiliate_id: str | None = None,
         user_ip: str | None = None,
         base_url: str | None = None,
+        enable_logging: bool = False,
+        log_level: int | str | None = None,
     ):
         """Initialize client.
 
@@ -50,11 +53,20 @@ class BaseClient:
             user_ip: End-user IP address (x-user-ip header)
                      Can also be set via SIDESHIFT_USER_IP environment variable
             base_url: Base URL for API (defaults to production)
+            enable_logging: Whether to enable logging (default: False)
+            log_level: Logging level if enable_logging is True (default: logging.INFO)
         """
         self.secret = secret or os.getenv("SIDESHIFT_SECRET")
         self.affiliate_id = affiliate_id or os.getenv("AFFILIATE_ID")
         self.user_ip = user_ip or os.getenv("SIDESHIFT_USER_IP")
         self.base_url = base_url or self.BASE_URL
+        self._logger = get_logger()
+        self._enable_logging = enable_logging
+        
+        if enable_logging and log_level is not None:
+            import logging
+            from sideshift_sdk.logging_config import configure_logging
+            configure_logging(level=log_level)
 
     def _get_headers(
         self, include_secret: bool = False, include_user_ip: bool = False
@@ -122,6 +134,10 @@ class BaseClient:
         if status_code == 429:
             retry_after = response.headers.get("Retry-After")
             retry_seconds = int(retry_after) if retry_after and retry_after.isdigit() else None
+            if hasattr(self, "_enable_logging") and self._enable_logging:
+                self._logger.warning(
+                    f"Rate limit exceeded (429). Retry after: {retry_seconds}s" if retry_seconds else "Rate limit exceeded (429)"
+                )
             raise SideShiftRateLimitError(
                 "Rate limit exceeded",
                 response_data={"retry_after": retry_seconds} if retry_seconds else None,
@@ -171,6 +187,8 @@ class SideShiftClient(BaseClient):
         user_ip: str | None = None,
         base_url: str | None = None,
         timeout: int = 30,
+        enable_logging: bool = False,
+        log_level: int | str | None = None,
     ):
         """Initialize synchronous client.
 
@@ -180,8 +198,10 @@ class SideShiftClient(BaseClient):
             user_ip: End-user IP address
             base_url: Base URL for API
             timeout: Request timeout in seconds
+            enable_logging: Whether to enable logging (default: False)
+            log_level: Logging level if enable_logging is True (default: logging.INFO)
         """
-        super().__init__(secret, affiliate_id, user_ip, base_url)
+        super().__init__(secret, affiliate_id, user_ip, base_url, enable_logging, log_level)
         self.timeout = timeout
         self._session = requests.Session()
 
@@ -232,8 +252,14 @@ class SideShiftClient(BaseClient):
                 return self._handle_response(response)
 
             except SideShiftRateLimitError:
+                if self._enable_logging:
+                    self._logger.warning(
+                        f"Rate limit exceeded for {method} {endpoint} (attempt {attempt + 1}/{max_retries + 1})"
+                    )
                 if attempt < max_retries:
                     wait_time = exponential_backoff(attempt)
+                    if self._enable_logging:
+                        self._logger.debug(f"Retrying after {wait_time:.2f}s")
                     time.sleep(wait_time)
                     continue
                 raise
@@ -365,6 +391,8 @@ class AsyncSideShiftClient(BaseClient):
         user_ip: str | None = None,
         base_url: str | None = None,
         timeout: int = 30,
+        enable_logging: bool = False,
+        log_level: int | str | None = None,
     ):
         """Initialize asynchronous client.
 
@@ -374,8 +402,10 @@ class AsyncSideShiftClient(BaseClient):
             user_ip: End-user IP address
             base_url: Base URL for API
             timeout: Request timeout in seconds
+            enable_logging: Whether to enable logging (default: False)
+            log_level: Logging level if enable_logging is True (default: logging.INFO)
         """
-        super().__init__(secret, affiliate_id, user_ip, base_url)
+        super().__init__(secret, affiliate_id, user_ip, base_url, enable_logging, log_level)
         self.timeout = timeout
         self._client: httpx.AsyncClient | None = None
 
@@ -438,8 +468,14 @@ class AsyncSideShiftClient(BaseClient):
                 return self._handle_response(response)
 
             except SideShiftRateLimitError:
+                if self._enable_logging:
+                    self._logger.warning(
+                        f"Rate limit exceeded for {method} {endpoint} (attempt {attempt + 1}/{max_retries + 1})"
+                    )
                 if attempt < max_retries:
                     wait_time = exponential_backoff(attempt)
+                    if self._enable_logging:
+                        self._logger.debug(f"Retrying after {wait_time:.2f}s")
                     await asyncio.sleep(wait_time)
                     continue
                 raise

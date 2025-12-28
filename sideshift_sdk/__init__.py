@@ -19,6 +19,7 @@ from sideshift_sdk.exceptions import (
     SideShiftNotFoundError,
     SideShiftRateLimitError,
 )
+from sideshift_sdk.logging_config import configure_logging, get_logger
 
 __version__ = "0.1.0"
 
@@ -32,4 +33,6 @@ __all__ = [
     "SideShiftNetworkError",
     "SideShiftNotFoundError",
     "SideShiftRateLimitError",
+    "configure_logging",
+    "get_logger",
 ]
