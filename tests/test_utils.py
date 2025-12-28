@@ -5,7 +5,13 @@ from unittest.mock import patch
 
 import pytest
 
-from sideshift_sdk.utils import build_coin_network, exponential_backoff, handle_rate_limit
+from sideshift_sdk.utils import (
+    build_coin_network,
+    exponential_backoff,
+    handle_rate_limit,
+    validate_non_empty_string,
+    validate_positive_amount,
+)
 
 
 def test_exponential_backoff():
@@ -54,3 +60,51 @@ def test_build_coin_network():
 
     # Test with empty network
     assert build_coin_network("btc", "") == "btc-"
+
+
+def test_validate_non_empty_string():
+    """Test validate_non_empty_string function."""
+    # Valid cases
+    validate_non_empty_string("test", "param")
+    validate_non_empty_string("  test  ", "param")  # Whitespace is OK, just not empty
+
+    # Invalid cases
+    with pytest.raises(ValueError, match="cannot be None"):
+        validate_non_empty_string(None, "param")
+
+    with pytest.raises(ValueError, match="cannot be empty"):
+        validate_non_empty_string("", "param")
+
+    with pytest.raises(ValueError, match="cannot be empty"):
+        validate_non_empty_string("   ", "param")
+
+    with pytest.raises(TypeError, match="must be a string"):
+        validate_non_empty_string(123, "param")
+
+
+def test_validate_positive_amount():
+    """Test validate_positive_amount function."""
+    # Valid cases
+    validate_positive_amount("1.0", "amount")
+    validate_positive_amount("0.001", "amount")
+    validate_positive_amount("100", "amount")
+    validate_positive_amount(None, "amount")  # None is allowed
+
+    # Invalid cases
+    with pytest.raises(ValueError, match="cannot be empty"):
+        validate_positive_amount("", "amount")
+
+    with pytest.raises(ValueError, match="cannot be empty"):
+        validate_positive_amount("   ", "amount")
+
+    with pytest.raises(ValueError, match="must be positive"):
+        validate_positive_amount("0", "amount")
+
+    with pytest.raises(ValueError, match="must be positive"):
+        validate_positive_amount("-1", "amount")
+
+    with pytest.raises(ValueError, match="must be a valid number"):
+        validate_positive_amount("not a number", "amount")
+
+    with pytest.raises(TypeError, match="must be a string"):
+        validate_positive_amount(123, "amount")

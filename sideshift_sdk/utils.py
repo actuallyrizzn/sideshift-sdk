@@ -3,6 +3,50 @@
 import time
 
 
+def validate_non_empty_string(value: str | None, param_name: str) -> None:
+    """Validate that a string parameter is not None and not empty.
+
+    Args:
+        value: The value to validate
+        param_name: Name of the parameter for error messages
+
+    Raises:
+        ValueError: If value is None or empty string
+    """
+    if value is None:
+        raise ValueError(f"{param_name} cannot be None")
+    if not isinstance(value, str):
+        raise TypeError(f"{param_name} must be a string, got {type(value).__name__}")
+    if not value.strip():
+        raise ValueError(f"{param_name} cannot be empty")
+
+
+def validate_positive_amount(amount: str | None, param_name: str) -> None:
+    """Validate that an amount string represents a positive number.
+
+    Args:
+        amount: The amount string to validate
+        param_name: Name of the parameter for error messages
+
+    Raises:
+        ValueError: If amount is invalid or non-positive
+    """
+    if amount is None:
+        return  # None is allowed for optional amounts
+    if not isinstance(amount, str):
+        raise TypeError(f"{param_name} must be a string, got {type(amount).__name__}")
+    if not amount.strip():
+        raise ValueError(f"{param_name} cannot be empty")
+    try:
+        amount_float = float(amount)
+        if amount_float <= 0:
+            raise ValueError(f"{param_name} must be positive, got {amount}")
+    except ValueError as e:
+        if "could not convert" in str(e).lower():
+            raise ValueError(f"{param_name} must be a valid number, got {amount}") from e
+        raise
+
+
 def handle_rate_limit(retry_after: int | None = None) -> None:
     """Handle rate limit by waiting.
 

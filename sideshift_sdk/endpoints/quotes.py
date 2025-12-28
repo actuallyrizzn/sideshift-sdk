@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from sideshift_sdk.constants import HEADER_USER_IP
 from sideshift_sdk.models import Quote, QuoteRequest
+from sideshift_sdk.utils import validate_non_empty_string, validate_positive_amount
 
 if TYPE_CHECKING:
     from sideshift_sdk.client import AsyncSideShiftClient, SideShiftClient
@@ -123,6 +124,15 @@ async def request_quote_async(
         ...     )
         ...     print(f"Quote ID: {quote.id}")
     """
+    # Input validation
+    validate_non_empty_string(deposit_coin, "deposit_coin")
+    validate_non_empty_string(settle_coin, "settle_coin")
+    
+    if deposit_amount is not None:
+        validate_positive_amount(deposit_amount, "deposit_amount")
+    if settle_amount is not None:
+        validate_positive_amount(settle_amount, "settle_amount")
+    
     if deposit_amount is None and settle_amount is None:
         raise ValueError("Either deposit_amount or settle_amount must be provided")
 

@@ -11,6 +11,7 @@ from sideshift_sdk.models import (
     Shift,
     VariableShiftRequest,
 )
+from sideshift_sdk.utils import validate_non_empty_string
 
 if TYPE_CHECKING:
     from sideshift_sdk.client import AsyncSideShiftClient, SideShiftClient
@@ -156,6 +157,10 @@ def create_fixed_shift(
         ... )
         >>> print(f"Shift ID: {shift.id}, Deposit Address: {shift.deposit_address}")
     """
+    # Input validation
+    validate_non_empty_string(quote_id, "quote_id")
+    validate_non_empty_string(settle_address, "settle_address")
+
     request_data = FixedShiftRequest(
         settle_address=settle_address,
         settle_memo=settle_memo,
@@ -207,6 +212,10 @@ async def create_fixed_shift_async(
     Returns:
         Shift object
     """
+    # Input validation
+    validate_non_empty_string(quote_id, "quote_id")
+    validate_non_empty_string(settle_address, "settle_address")
+
     request_data = FixedShiftRequest(
         settle_address=settle_address,
         settle_memo=settle_memo,
@@ -336,6 +345,11 @@ async def create_variable_shift_async(
     Returns:
         Shift object
     """
+    # Input validation
+    validate_non_empty_string(deposit_coin, "deposit_coin")
+    validate_non_empty_string(settle_coin, "settle_coin")
+    validate_non_empty_string(settle_address, "settle_address")
+
     request_data = VariableShiftRequest(
         deposit_coin=deposit_coin,
         deposit_network=deposit_network,
@@ -380,6 +394,10 @@ def set_refund_address(
     Returns:
         Updated Shift object
     """
+    # Input validation
+    validate_non_empty_string(shift_id, "shift_id")
+    validate_non_empty_string(address, "address")
+
     request_data = SetRefundAddressRequest(address=address, memo=memo)
     response = client.post(
         f"/shifts/{shift_id}/set-refund-address",
@@ -406,6 +424,10 @@ async def set_refund_address_async(
     Returns:
         Updated Shift object
     """
+    # Input validation
+    validate_non_empty_string(shift_id, "shift_id")
+    validate_non_empty_string(address, "address")
+
     request_data = SetRefundAddressRequest(address=address, memo=memo)
     response = await client.post(
         f"/shifts/{shift_id}/set-refund-address",

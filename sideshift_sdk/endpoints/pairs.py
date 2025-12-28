@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING
 
 from sideshift_sdk.models import PairInfo
+from sideshift_sdk.utils import validate_non_empty_string
 
 if TYPE_CHECKING:
     from sideshift_sdk.client import AsyncSideShiftClient, SideShiftClient
@@ -69,6 +70,10 @@ async def get_pair_async(
     Returns:
         PairInfo object
     """
+    # Input validation
+    validate_non_empty_string(from_coin, "from_coin")
+    validate_non_empty_string(to_coin, "to_coin")
+    
     params: dict[str, str | float] = {
         "affiliateId": affiliate_id or client.affiliate_id or "",
     }

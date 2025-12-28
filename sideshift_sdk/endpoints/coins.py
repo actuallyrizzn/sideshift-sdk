@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from sideshift_sdk.constants import HEADER_ACCEPT, IMAGE_FORMAT_PNG, IMAGE_FORMAT_SVG
 from sideshift_sdk.models import Coin
+from sideshift_sdk.utils import validate_non_empty_string
 
 if TYPE_CHECKING:
     from sideshift_sdk.client import AsyncSideShiftClient, SideShiftClient
@@ -82,6 +83,11 @@ async def get_coin_icon_async(
     Returns:
         Icon image bytes
     """
+    # Input validation
+    validate_non_empty_string(coin_network, "coin_network")
+    if format not in (IMAGE_FORMAT_SVG, IMAGE_FORMAT_PNG):
+        raise ValueError(f"format must be '{IMAGE_FORMAT_SVG}' or '{IMAGE_FORMAT_PNG}', got '{format}'")
+    
     accept_header = f"image/{format}+xml" if format == IMAGE_FORMAT_SVG else f"image/{format}"
     headers = {HEADER_ACCEPT: accept_header}
 
