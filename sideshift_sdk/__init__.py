@@ -18,6 +18,7 @@ from sideshift_sdk.exceptions import (
     SideShiftNetworkError,
     SideShiftNotFoundError,
     SideShiftRateLimitError,
+    SideShiftSizeLimitError,
 )
 from sideshift_sdk.logging_config import configure_logging, get_logger
 from sideshift_sdk.models import ShiftStatus
@@ -34,6 +35,7 @@ __all__ = [
     "SideShiftNetworkError",
     "SideShiftNotFoundError",
     "SideShiftRateLimitError",
+    "SideShiftSizeLimitError",
     "configure_logging",
     "get_logger",
     "ShiftStatus",

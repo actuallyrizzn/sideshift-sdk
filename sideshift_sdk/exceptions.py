@@ -171,3 +171,26 @@ class SideShiftNetworkError(SideShiftException):
             endpoint: API endpoint that failed
         """
         super().__init__(message, None, response_data, request_id, method, endpoint)
+
+
+class SideShiftSizeLimitError(SideShiftException):
+    """Raised when request or response size exceeds configured limits."""
+
+    def __init__(
+        self,
+        message: str = "Size limit exceeded",
+        response_data: dict | None = None,
+        request_id: str | None = None,
+        method: str | None = None,
+        endpoint: str | None = None,
+    ):
+        """Initialize size limit error.
+
+        Args:
+            message: Error message
+            response_data: Response data from API
+            request_id: Request ID for correlation tracking
+            method: HTTP method (GET, POST, etc.)
+            endpoint: API endpoint that failed
+        """
+        super().__init__(message, None, response_data, request_id, method, endpoint)

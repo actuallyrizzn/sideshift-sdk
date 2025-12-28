@@ -19,6 +19,9 @@ class SDKConfig:
     DEFAULT_MAX_CONNECTIONS = 10
     DEFAULT_MAX_KEEPALIVE_CONNECTIONS = 5
     DEFAULT_VERIFY_SSL = True
+    # Size limits in bytes (10MB for requests, 50MB for responses)
+    DEFAULT_MAX_REQUEST_SIZE = 10 * 1024 * 1024  # 10MB
+    DEFAULT_MAX_RESPONSE_SIZE = 50 * 1024 * 1024  # 50MB
 
     @staticmethod
     def get_timeout(provided: int | None = None) -> int:
@@ -162,4 +165,44 @@ class SDKConfig:
             # Accept "true", "1", "yes" as True, everything else as False
             return env_verify.lower() in ("true", "1", "yes")
         return SDKConfig.DEFAULT_VERIFY_SSL
+
+    @staticmethod
+    def get_max_request_size(provided: int | None = None) -> int:
+        """Get max request size value from provided value or environment variable.
+
+        Args:
+            provided: Max request size value provided directly (takes precedence)
+
+        Returns:
+            Maximum request body size in bytes
+        """
+        if provided is not None:
+            return provided
+        env_size = os.getenv("SIDESHIFT_MAX_REQUEST_SIZE")
+        if env_size:
+            try:
+                return int(env_size)
+            except ValueError:
+                pass
+        return SDKConfig.DEFAULT_MAX_REQUEST_SIZE
+
+    @staticmethod
+    def get_max_response_size(provided: int | None = None) -> int:
+        """Get max response size value from provided value or environment variable.
+
+        Args:
+            provided: Max response size value provided directly (takes precedence)
+
+        Returns:
+            Maximum response body size in bytes
+        """
+        if provided is not None:
+            return provided
+        env_size = os.getenv("SIDESHIFT_MAX_RESPONSE_SIZE")
+        if env_size:
+            try:
+                return int(env_size)
+            except ValueError:
+                pass
+        return SDKConfig.DEFAULT_MAX_RESPONSE_SIZE
 

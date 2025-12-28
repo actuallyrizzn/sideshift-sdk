@@ -2,6 +2,7 @@
 
 import asyncio
 import inspect
+import json
 import os
 import time
 import uuid
@@ -30,6 +31,7 @@ from sideshift_sdk.exceptions import (
     SideShiftNetworkError,
     SideShiftNotFoundError,
     SideShiftRateLimitError,
+    SideShiftSizeLimitError,
 )
 from sideshift_sdk.config import SDKConfig
 from sideshift_sdk.logging_config import get_logger
@@ -199,6 +201,7 @@ class BaseClient:
         request_id: str | None = None,
         method: str | None = None,
         endpoint: str | None = None,
+        max_response_size: int | None = None,
     ) -> JsonDict:
         """Handle HTTP response and raise appropriate exceptions.
 
@@ -207,6 +210,7 @@ class BaseClient:
             request_id: Request ID for correlation tracking (optional)
             method: HTTP method (GET, POST, etc.) for error context
             endpoint: API endpoint for error context
+            max_response_size: Maximum response size in bytes (optional)
 
         Returns:
             Response JSON data
@@ -229,6 +233,61 @@ class BaseClient:
             return {}
 
         if status_code == 200 or status_code == 201:
+            # Check response size if limit is configured
+            if max_response_size is not None:
+                content_length = None
+                # Try to get Content-Length from headers
+                if hasattr(response, "headers"):
+                    content_length_str = response.headers.get("Content-Length") or response.headers.get("content-length")
+                    if content_length_str:
+                        try:
+                            content_length = int(content_length_str)
+                        except (ValueError, TypeError):
+                            pass
+                
+                # If Content-Length is available and exceeds limit, raise error
+                if content_length is not None and content_length > max_response_size:
+                    error_msg = (
+                        f"Response size ({content_length} bytes) exceeds maximum allowed size "
+                        f"({max_response_size} bytes)"
+                    )
+                    if hasattr(self, "_enable_logging") and self._enable_logging:
+                        self._logger.error(f"{error_msg} [Request-ID: {request_id}]")
+                    raise SideShiftSizeLimitError(
+                        error_msg,
+                        response_data={"request_id": request_id, "size": content_length, "max_size": max_response_size} if request_id else {"size": content_length, "max_size": max_response_size},
+                        request_id=request_id,
+                        method=method,
+                        endpoint=endpoint,
+                    )
+                
+                # For responses without Content-Length, check actual content size
+                # Only check if content is available and is bytes-like
+                if content_length is None and hasattr(response, "content"):
+                    try:
+                        content = response.content
+                        # Check if content is bytes-like (bytes, bytearray, etc.)
+                        if isinstance(content, (bytes, bytearray)):
+                            content_size = len(content)
+                            if content_size > max_response_size:
+                                error_msg = (
+                                    f"Response size ({content_size} bytes) exceeds maximum allowed size "
+                                    f"({max_response_size} bytes)"
+                                )
+                                if hasattr(self, "_enable_logging") and self._enable_logging:
+                                    self._logger.error(f"{error_msg} [Request-ID: {request_id}]")
+                                raise SideShiftSizeLimitError(
+                                    error_msg,
+                                    response_data={"request_id": request_id, "size": content_size, "max_size": max_response_size} if request_id else {"size": content_size, "max_size": max_response_size},
+                                    request_id=request_id,
+                                    method=method,
+                                    endpoint=endpoint,
+                                )
+                    except (TypeError, AttributeError):
+                        # If content is not available or not bytes-like, skip size check
+                        # This can happen with streaming responses or Mock objects in tests
+                        pass
+            
             try:
                 return response.json()
             except (ValueError, TypeError) as e:
@@ -334,6 +393,8 @@ class SideShiftClient(BaseClient):
         verify_ssl: bool | None = None,
         proxy: str | dict[str, str] | None = None,
         max_retries: int | None = None,
+        max_request_size: int | None = None,
+        max_response_size: int | None = None,
         enable_logging: bool = False,
         log_level: int | str | None = None,
     ):
@@ -350,6 +411,8 @@ class SideShiftClient(BaseClient):
             verify_ssl: Whether to verify SSL certificates (can also be set via SIDESHIFT_VERIFY_SSL env var, default: True)
             proxy: Proxy URL (string) or dict mapping protocol to URL (can also be set via SIDESHIFT_PROXY, HTTP_PROXY, or HTTPS_PROXY env vars)
             max_retries: Maximum number of retries for rate limits (can also be set via SIDESHIFT_MAX_RETRIES env var, default: 3)
+            max_request_size: Maximum request body size in bytes (can also be set via SIDESHIFT_MAX_REQUEST_SIZE env var, default: 10MB)
+            max_response_size: Maximum response body size in bytes (can also be set via SIDESHIFT_MAX_RESPONSE_SIZE env var, default: 50MB)
             enable_logging: Whether to enable logging (default: False)
             log_level: Logging level if enable_logging is True (default: logging.INFO)
         """
@@ -357,6 +420,8 @@ class SideShiftClient(BaseClient):
         self.timeout = SDKConfig.get_timeout(timeout)
         self.max_connections = SDKConfig.get_max_connections(max_connections)
         self.max_keepalive_connections = SDKConfig.get_max_keepalive_connections(max_keepalive_connections)
+        self.max_request_size = SDKConfig.get_max_request_size(max_request_size)
+        self.max_response_size = SDKConfig.get_max_response_size(max_response_size)
         self.verify_ssl = SDKConfig.get_verify_ssl(verify_ssl)
         self.proxy = SDKConfig.get_proxy(proxy)
         self.max_retries = SDKConfig.get_max_retries(max_retries)
@@ -416,6 +481,30 @@ class SideShiftClient(BaseClient):
         if headers:
             request_headers.update(headers)
 
+        # Validate request body size if json_data is provided
+        if json_data is not None and self.max_request_size is not None:
+            try:
+                request_body = json.dumps(json_data)
+                request_size = len(request_body.encode("utf-8"))
+                if request_size > self.max_request_size:
+                    error_msg = (
+                        f"Request body size ({request_size} bytes) exceeds maximum allowed size "
+                        f"({self.max_request_size} bytes)"
+                    )
+                    if self._enable_logging:
+                        self._logger.error(f"{error_msg} [Request-ID: {request_id}]")
+                    raise SideShiftSizeLimitError(
+                        error_msg,
+                        response_data={"request_id": request_id, "size": request_size, "max_size": self.max_request_size} if request_id else {"size": request_size, "max_size": self.max_request_size},
+                        request_id=request_id,
+                        method=method,
+                        endpoint=endpoint,
+                    )
+            except (TypeError, ValueError) as e:
+                # If JSON serialization fails, let the request library handle it
+                if self._enable_logging:
+                    self._logger.warning(f"Could not validate request size: {e}")
+
         for attempt in range(retry_count + 1):
             try:
                 if self._enable_logging:
@@ -454,7 +543,13 @@ class SideShiftClient(BaseClient):
                         log_msg += f" [Response-Request-ID: {response_request_id}]"
                     self._logger.debug(log_msg)
 
-                response_data = self._handle_response(response, request_id=request_id, method=method, endpoint=endpoint)
+                response_data = self._handle_response(
+                    response, 
+                    request_id=request_id, 
+                    method=method, 
+                    endpoint=endpoint,
+                    max_response_size=self.max_response_size,
+                )
                 
                 # Call response hooks
                 for hook in self._response_hooks:
@@ -620,7 +715,12 @@ class SideShiftClient(BaseClient):
         )
 
         if response.status_code != 200:
-            self._handle_response(response, method="GET", endpoint=endpoint)
+            self._handle_response(
+                response, 
+                method="GET", 
+                endpoint=endpoint,
+                max_response_size=self.max_response_size,
+            )
             return b""
 
         return response.content
@@ -653,6 +753,8 @@ class AsyncSideShiftClient(BaseClient):
         verify_ssl: bool | None = None,
         proxy: str | dict[str, str] | None = None,
         max_retries: int | None = None,
+        max_request_size: int | None = None,
+        max_response_size: int | None = None,
         enable_logging: bool = False,
         log_level: int | str | None = None,
     ):
@@ -669,6 +771,8 @@ class AsyncSideShiftClient(BaseClient):
             verify_ssl: Whether to verify SSL certificates (can also be set via SIDESHIFT_VERIFY_SSL env var, default: True)
             proxy: Proxy URL (string) or dict mapping protocol to URL (can also be set via SIDESHIFT_PROXY, HTTP_PROXY, or HTTPS_PROXY env vars)
             max_retries: Maximum number of retries for rate limits (can also be set via SIDESHIFT_MAX_RETRIES env var, default: 3)
+            max_request_size: Maximum request body size in bytes (can also be set via SIDESHIFT_MAX_REQUEST_SIZE env var, default: 10MB)
+            max_response_size: Maximum response body size in bytes (can also be set via SIDESHIFT_MAX_RESPONSE_SIZE env var, default: 50MB)
             enable_logging: Whether to enable logging (default: False)
             log_level: Logging level if enable_logging is True (default: logging.INFO)
         """
@@ -679,6 +783,8 @@ class AsyncSideShiftClient(BaseClient):
         self.verify_ssl = SDKConfig.get_verify_ssl(verify_ssl)
         self.proxy = SDKConfig.get_proxy(proxy)
         self.max_retries = SDKConfig.get_max_retries(max_retries)
+        self.max_request_size = SDKConfig.get_max_request_size(max_request_size)
+        self.max_response_size = SDKConfig.get_max_response_size(max_response_size)
         self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -743,6 +849,30 @@ class AsyncSideShiftClient(BaseClient):
         if headers:
             request_headers.update(headers)
 
+        # Validate request body size if json_data is provided
+        if json_data is not None and self.max_request_size is not None:
+            try:
+                request_body = json.dumps(json_data)
+                request_size = len(request_body.encode("utf-8"))
+                if request_size > self.max_request_size:
+                    error_msg = (
+                        f"Request body size ({request_size} bytes) exceeds maximum allowed size "
+                        f"({self.max_request_size} bytes)"
+                    )
+                    if self._enable_logging:
+                        self._logger.error(f"{error_msg} [Request-ID: {request_id}]")
+                    raise SideShiftSizeLimitError(
+                        error_msg,
+                        response_data={"request_id": request_id, "size": request_size, "max_size": self.max_request_size} if request_id else {"size": request_size, "max_size": self.max_request_size},
+                        request_id=request_id,
+                        method=method,
+                        endpoint=endpoint,
+                    )
+            except (TypeError, ValueError) as e:
+                # If JSON serialization fails, let the request library handle it
+                if self._enable_logging:
+                    self._logger.warning(f"Could not validate request size: {e}")
+
         client = await self._get_client()
 
         for attempt in range(retry_count + 1):
@@ -784,7 +914,13 @@ class AsyncSideShiftClient(BaseClient):
                         log_msg += f" [Response-Request-ID: {response_request_id}]"
                     self._logger.debug(log_msg)
 
-                response_data = self._handle_response(response, request_id=request_id, method=method, endpoint=endpoint)
+                response_data = self._handle_response(
+                    response, 
+                    request_id=request_id, 
+                    method=method, 
+                    endpoint=endpoint,
+                    max_response_size=self.max_response_size,
+                )
                 
                 # Call response hooks (support both sync and async)
                 for hook in self._response_hooks:
@@ -928,7 +1064,12 @@ class AsyncSideShiftClient(BaseClient):
         )
 
         if response.status_code != 200:
-            self._handle_response(response, method="GET", endpoint=endpoint)
+            self._handle_response(
+                response, 
+                method="GET", 
+                endpoint=endpoint,
+                max_response_size=self.max_response_size,
+            )
             return b""
 
         return response.content
