@@ -1545,6 +1545,72 @@ class SideShiftClient(BaseClient):
 
         return response.content
 
+    def batch_get(
+        self,
+        requests: list[tuple[str, JsonDict | None, HeadersDict | None]],
+        require_auth: bool = False,
+        require_user_ip: bool = False,
+        timeout: int | None = None,
+    ) -> list[JsonDict | Exception]:
+        """Batch multiple GET requests.
+
+        Args:
+            requests: List of (endpoint, params, headers) tuples
+            require_auth: Whether authentication is required for all requests
+            require_user_ip: Whether user IP header is required for all requests
+            timeout: Request timeout in seconds (if None, uses client-level timeout)
+
+        Returns:
+            List of response data or exceptions (in same order as requests)
+
+        Example:
+            >>> results = client.batch_get([
+            ...     ("/coins", None, None),
+            ...     ("/pairs", {"pairs": ["btc", "eth"]}, None),
+            ... ])
+            >>> coins_data = results[0]
+            >>> pairs_data = results[1]
+        """
+        results = []
+        for endpoint, params, headers in requests:
+            try:
+                result = self.get(
+                    endpoint, params=params, headers=headers, require_auth=require_auth, require_user_ip=require_user_ip, timeout=timeout
+                )
+                results.append(result)
+            except Exception as e:
+                results.append(e)
+        return results
+
+    def batch_post(
+        self,
+        requests: list[tuple[str, JsonDict | None, HeadersDict | None]],
+        require_auth: bool = False,
+        require_user_ip: bool = False,
+        timeout: int | None = None,
+    ) -> list[JsonDict | Exception]:
+        """Batch multiple POST requests.
+
+        Args:
+            requests: List of (endpoint, json_data, headers) tuples
+            require_auth: Whether authentication is required for all requests
+            require_user_ip: Whether user IP header is required for all requests
+            timeout: Request timeout in seconds (if None, uses client-level timeout)
+
+        Returns:
+            List of response data or exceptions (in same order as requests)
+        """
+        results = []
+        for endpoint, json_data, headers in requests:
+            try:
+                result = self.post(
+                    endpoint, json_data=json_data, headers=headers, require_auth=require_auth, require_user_ip=require_user_ip, timeout=timeout
+                )
+                results.append(result)
+            except Exception as e:
+                results.append(e)
+        return results
+
     def close(self) -> None:
         """Close the HTTP session and release resources.
 
@@ -2035,6 +2101,72 @@ class AsyncSideShiftClient(BaseClient):
             require_user_ip=require_user_ip,
             timeout=timeout,
         )
+
+    async def batch_get(
+        self,
+        requests: list[tuple[str, JsonDict | None, HeadersDict | None]],
+        require_auth: bool = False,
+        require_user_ip: bool = False,
+        timeout: int | None = None,
+    ) -> list[JsonDict | Exception]:
+        """Batch multiple GET requests concurrently.
+
+        Args:
+            requests: List of (endpoint, params, headers) tuples
+            require_auth: Whether authentication is required for all requests
+            require_user_ip: Whether user IP header is required for all requests
+            timeout: Request timeout in seconds (if None, uses client-level timeout)
+
+        Returns:
+            List of response data or exceptions (in same order as requests)
+
+        Example:
+            >>> results = await client.batch_get([
+            ...     ("/coins", None, None),
+            ...     ("/pairs", {"pairs": ["btc", "eth"]}, None),
+            ... ])
+            >>> coins_data = results[0]
+            >>> pairs_data = results[1]
+        """
+        async def make_request(endpoint: str, params: JsonDict | None, headers: HeadersDict | None) -> JsonDict | Exception:
+            try:
+                return await self.get(
+                    endpoint, params=params, headers=headers, require_auth=require_auth, require_user_ip=require_user_ip, timeout=timeout
+                )
+            except Exception as e:
+                return e
+
+        tasks = [make_request(endpoint, params, headers) for endpoint, params, headers in requests]
+        return await asyncio.gather(*tasks)
+
+    async def batch_post(
+        self,
+        requests: list[tuple[str, JsonDict | None, HeadersDict | None]],
+        require_auth: bool = False,
+        require_user_ip: bool = False,
+        timeout: int | None = None,
+    ) -> list[JsonDict | Exception]:
+        """Batch multiple POST requests concurrently.
+
+        Args:
+            requests: List of (endpoint, json_data, headers) tuples
+            require_auth: Whether authentication is required for all requests
+            require_user_ip: Whether user IP header is required for all requests
+            timeout: Request timeout in seconds (if None, uses client-level timeout)
+
+        Returns:
+            List of response data or exceptions (in same order as requests)
+        """
+        async def make_request(endpoint: str, json_data: JsonDict | None, headers: HeadersDict | None) -> JsonDict | Exception:
+            try:
+                return await self.post(
+                    endpoint, json_data=json_data, headers=headers, require_auth=require_auth, require_user_ip=require_user_ip, timeout=timeout
+                )
+            except Exception as e:
+                return e
+
+        tasks = [make_request(endpoint, json_data, headers) for endpoint, json_data, headers in requests]
+        return await asyncio.gather(*tasks)
 
     async def close(self) -> None:
         """Close the async HTTP client and release resources.
