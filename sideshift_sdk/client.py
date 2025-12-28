@@ -1,10 +1,12 @@
 """Client classes for SideShift SDK."""
 
 import asyncio
+import hashlib
 import inspect
 import json
 import logging
 import os
+import threading
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -103,6 +105,13 @@ class BaseClient:
         self._request_hooks: list[RequestHook | AsyncRequestHook] = []
         self._response_hooks: list[ResponseHook | AsyncResponseHook] = []
         self._error_hooks: list[ErrorHook | AsyncErrorHook] = []
+        
+        # Request deduplication (disabled by default for backward compatibility)
+        self._enable_request_deduplication: bool = False
+        self._request_cache_ttl: float = 0.0  # 0 = disabled
+        self._in_flight_requests: dict[str, Any] = {}  # request_key -> future/result
+        self._request_cache: dict[str, tuple[JsonDict, float]] = {}  # request_key -> (response, expiry_time)
+        self._deduplication_lock: threading.Lock | asyncio.Lock | None = None
 
     def set_secret(self, secret: str | None) -> None:
         """Update the secret key for authentication.
@@ -863,7 +872,7 @@ class BaseClient:
                 if self._enable_logging:
                     self._logger.warning(f"Error hook error: {hook_error}")
 
-    async def _call_error_hooks_async(self, error: Exception, method: str, endpoint: str) -> None:
+    async     def _call_error_hooks_async(self, error: Exception, method: str, endpoint: str) -> None:
         """Call error hooks (async version, supports both sync and async hooks).
 
         Args:
@@ -880,6 +889,80 @@ class BaseClient:
             except Exception as hook_error:
                 if self._enable_logging:
                     self._logger.warning(f"Error hook error: {hook_error}")
+
+    def _create_request_key(
+        self, method: str, endpoint: str, params: JsonDict | None, json_data: JsonDict | None
+    ) -> str:
+        """Create a unique key for request deduplication.
+
+        Args:
+            method: HTTP method
+            endpoint: API endpoint
+            params: Query parameters
+            json_data: JSON body data
+
+        Returns:
+            Unique request key string
+        """
+        # Create a deterministic key from request parameters
+        key_parts = [
+            method.upper(),
+            endpoint,
+            json.dumps(params, sort_keys=True) if params else "{}",
+            json.dumps(json_data, sort_keys=True) if json_data else "{}",
+        ]
+        key_string = "|".join(key_parts)
+        # Use hash for shorter keys
+        return hashlib.sha256(key_string.encode("utf-8")).hexdigest()
+
+    def _check_request_cache(self, request_key: str) -> JsonDict | None:
+        """Check if a cached response exists and is still valid.
+
+        Args:
+            request_key: Request key
+
+        Returns:
+            Cached response if valid, None otherwise
+        """
+        if not self._enable_request_deduplication or self._request_cache_ttl <= 0:
+            return None
+
+        if request_key in self._request_cache:
+            response_data, expiry_time = self._request_cache[request_key]
+            if time.time() < expiry_time:
+                if self._enable_logging:
+                    self._logger.debug(f"Returning cached response for request key: {request_key[:16]}...")
+                return response_data
+            else:
+                # Expired, remove from cache
+                del self._request_cache[request_key]
+
+        return None
+
+    def _store_request_cache(self, request_key: str, response_data: JsonDict) -> None:
+        """Store a response in the cache.
+
+        Args:
+            request_key: Request key
+            response_data: Response data to cache
+        """
+        if self._enable_request_deduplication and self._request_cache_ttl > 0:
+            expiry_time = time.time() + self._request_cache_ttl
+            self._request_cache[request_key] = (response_data, expiry_time)
+            if self._enable_logging:
+                self._logger.debug(f"Cached response for request key: {request_key[:16]}... (TTL: {self._request_cache_ttl}s)")
+
+    def _cleanup_expired_cache(self) -> None:
+        """Remove expired entries from the request cache."""
+        if not self._enable_request_deduplication:
+            return
+
+        current_time = time.time()
+        expired_keys = [
+            key for key, (_, expiry_time) in self._request_cache.items() if current_time >= expiry_time
+        ]
+        for key in expired_keys:
+            del self._request_cache[key]
 
 
 class SideShiftClient(BaseClient):
@@ -1254,6 +1337,8 @@ class AsyncSideShiftClient(BaseClient):
         max_response_size: int | None = None,
         enable_logging: bool = False,
         log_level: int | str | None = None,
+        enable_request_deduplication: bool = False,
+        request_cache_ttl: float = 0.0,
     ):
         """Initialize asynchronous client.
 
@@ -1277,8 +1362,15 @@ class AsyncSideShiftClient(BaseClient):
             max_response_size: Maximum response body size in bytes (can also be set via SIDESHIFT_MAX_RESPONSE_SIZE env var, default: 50MB)
             enable_logging: Whether to enable logging (default: False)
             log_level: Logging level if enable_logging is True (default: logging.INFO)
+            enable_request_deduplication: Whether to enable request deduplication (default: False)
+                                        When enabled, duplicate concurrent requests share the same HTTP call
+            request_cache_ttl: Response cache TTL in seconds (default: 0 = disabled)
+                             Only used if enable_request_deduplication is True
         """
         super().__init__(secret, affiliate_id, user_ip, base_url, api_version, enable_logging, log_level)
+        # Set deduplication settings
+        self._enable_request_deduplication = enable_request_deduplication
+        self._request_cache_ttl = request_cache_ttl
         self.timeout: int = SDKConfig.get_timeout(timeout)
         self.max_connections: int = SDKConfig.get_max_connections(max_connections)
         self.max_keepalive_connections: int = SDKConfig.get_max_keepalive_connections(max_keepalive_connections)
@@ -1288,6 +1380,10 @@ class AsyncSideShiftClient(BaseClient):
         self.max_request_size: int = SDKConfig.get_max_request_size(max_request_size)
         self.max_response_size: int = SDKConfig.get_max_response_size(max_response_size)
         self._client: httpx.AsyncClient | None = None
+        
+        # Initialize async lock for deduplication
+        if self._enable_request_deduplication:
+            self._deduplication_lock = asyncio.Lock()
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create async HTTP client.
@@ -1343,89 +1439,136 @@ class AsyncSideShiftClient(BaseClient):
         Returns:
             Response JSON data
         """
+        # Request deduplication: check cache first
+        if self._enable_request_deduplication:
+            request_key = self._create_request_key(method, endpoint, params, json_data)
+            cached_response = self._check_request_cache(request_key)
+            if cached_response is not None:
+                return cached_response
+            
+            # Check if request is already in flight
+            async with self._deduplication_lock:  # type: ignore[union-attr]
+                if request_key in self._in_flight_requests:
+                    if self._enable_logging:
+                        self._logger.debug(f"Deduplicating request: {request_key[:16]}...")
+                    # Wait for the in-flight request to complete
+                    future = self._in_flight_requests[request_key]
+                    return await future
+            
+            # Create future for this request
+            future: asyncio.Future[JsonDict] = asyncio.Future()
+            async with self._deduplication_lock:  # type: ignore[union-attr]
+                self._in_flight_requests[request_key] = future
+        
         # Prepare request (common logic)
         url, request_id, request_headers, retry_count, request_timeout = self._prepare_request(
             method, endpoint, params, json_data, headers, require_auth, require_user_ip, max_retries, timeout
         )
 
         client = await self._get_client()
+        
+        # Execute request with deduplication handling
+        try:
+            for attempt in range(retry_count + 1):
+                try:
+                    self._log_request_start(method, endpoint, params, request_id, attempt, retry_count)
+                    await self._call_request_hooks_async(method, endpoint, params, json_data, request_headers)
 
-        for attempt in range(retry_count + 1):
-            try:
-                self._log_request_start(method, endpoint, params, request_id, attempt, retry_count)
-                await self._call_request_hooks_async(method, endpoint, params, json_data, request_headers)
+                    # Make HTTP request (async-specific)
+                    response = await client.request(
+                        method=method,
+                        url=url,
+                        params=params,
+                        json=json_data,
+                        headers=request_headers,
+                        timeout=request_timeout,
+                    )
 
-                # Make HTTP request (async-specific)
-                response = await client.request(
-                    method=method,
-                    url=url,
-                    params=params,
-                    json=json_data,
-                    headers=request_headers,
-                    timeout=request_timeout,
-                )
+                    # Extract request ID from response headers if present (API may echo it back)
+                    response_request_id = response.headers.get(HEADER_REQUEST_ID.lower()) or response.headers.get(HEADER_REQUEST_ID)
+                    self._log_response(method, endpoint, response.status_code, request_id, response_request_id)
 
-                # Extract request ID from response headers if present (API may echo it back)
-                response_request_id = response.headers.get(HEADER_REQUEST_ID.lower()) or response.headers.get(HEADER_REQUEST_ID)
-                self._log_response(method, endpoint, response.status_code, request_id, response_request_id)
+                    response_data = self._handle_response(
+                        response,
+                        request_id=request_id,
+                        method=method,
+                        endpoint=endpoint,
+                        max_response_size=self.max_response_size,
+                    )
 
-                response_data = self._handle_response(
-                    response,
-                    request_id=request_id,
-                    method=method,
-                    endpoint=endpoint,
-                    max_response_size=self.max_response_size,
-                )
+                    await self._call_response_hooks_async(method, endpoint, response_data)
+                    
+                    # Store in cache if deduplication enabled
+                    if self._enable_request_deduplication:
+                        request_key = self._create_request_key(method, endpoint, params, json_data)
+                        self._store_request_cache(request_key, response_data)
+                    
+                    # Complete future and notify waiting requests
+                    if self._enable_request_deduplication:
+                        async with self._deduplication_lock:  # type: ignore[union-attr]
+                            if request_key in self._in_flight_requests:
+                                future_to_complete = self._in_flight_requests.pop(request_key)
+                                if not future_to_complete.done():
+                                    future_to_complete.set_result(response_data)
+                    
+                    return response_data
 
-                await self._call_response_hooks_async(method, endpoint, response_data)
-                return response_data
-
-            except SideShiftRateLimitError as rate_limit_error:
-                if self._enable_logging:
-                    self._logger.warning(
+                except SideShiftRateLimitError as rate_limit_error:
+                    if self._enable_logging:
+                        self._logger.warning(
                         f"Rate limit exceeded for {method} {endpoint} (attempt {attempt + 1}/{retry_count + 1}) [Request-ID: {request_id}]"
                     )
-                if attempt < retry_count:
-                    wait_time = self._calculate_retry_wait_time(rate_limit_error, attempt)
-                    await asyncio.sleep(wait_time)
-                    continue
-                raise
-            except (httpx.ConnectError, httpx.TimeoutException) as e:
-                # Network errors - raise SDK exception with better message
-                error_msg = f"Network error: {str(e)}"
-                if isinstance(e, httpx.TimeoutException):
-                    error_msg = f"Request timeout after {self.timeout} seconds"
-                if self._enable_logging:
-                    self._logger.error(f"Network error for {method} {endpoint} [Request-ID: {request_id}]: {error_msg}")
-                raise SideShiftNetworkError(
-                    error_msg,
-                    response_data={"request_id": request_id} if request_id else None,
-                    request_id=request_id,
-                    method=method,
-                    endpoint=endpoint,
-                ) from e
-            except asyncio.CancelledError:
-                # Request was cancelled - re-raise to allow proper cancellation
-                if self._enable_logging:
-                    self._logger.debug(f"Request cancelled: {method} {endpoint} [Request-ID: {request_id}]")
-                raise
-            except httpx.RequestError as e:
-                # Other httpx exceptions (DNS, SSL, etc.)
-                if self._enable_logging:
-                    self._logger.error(f"Request error for {method} {endpoint} [Request-ID: {request_id}]: {str(e)}")
-                network_error = SideShiftNetworkError(
-                    f"Network request failed: {str(e)}",
-                    response_data={"request_id": request_id} if request_id else None,
-                    request_id=request_id,
-                    method=method,
-                    endpoint=endpoint,
-                )
-                await self._call_error_hooks_async(network_error, method, endpoint)
-                raise network_error from e
-            except SideShiftException as e:
-                # Call error hooks for SDK exceptions
-                await self._call_error_hooks_async(e, method, endpoint)
-                raise
+                    if attempt < retry_count:
+                        wait_time = self._calculate_retry_wait_time(rate_limit_error, attempt)
+                        await asyncio.sleep(wait_time)
+                        continue
+                    raise
+                except (httpx.ConnectError, httpx.TimeoutException) as e:
+                    # Network errors - raise SDK exception with better message
+                    error_msg = f"Network error: {str(e)}"
+                    if isinstance(e, httpx.TimeoutException):
+                        error_msg = f"Request timeout after {self.timeout} seconds"
+                    if self._enable_logging:
+                        self._logger.error(f"Network error for {method} {endpoint} [Request-ID: {request_id}]: {error_msg}")
+                    raise SideShiftNetworkError(
+                        error_msg,
+                        response_data={"request_id": request_id} if request_id else None,
+                        request_id=request_id,
+                        method=method,
+                        endpoint=endpoint,
+                    ) from e
+                except asyncio.CancelledError:
+                    # Request was cancelled - re-raise to allow proper cancellation
+                    if self._enable_logging:
+                        self._logger.debug(f"Request cancelled: {method} {endpoint} [Request-ID: {request_id}]")
+                    raise
+                except httpx.RequestError as e:
+                    # Other httpx exceptions (DNS, SSL, etc.)
+                    if self._enable_logging:
+                        self._logger.error(f"Request error for {method} {endpoint} [Request-ID: {request_id}]: {str(e)}")
+                    network_error = SideShiftNetworkError(
+                        f"Network request failed: {str(e)}",
+                        response_data={"request_id": request_id} if request_id else None,
+                        request_id=request_id,
+                        method=method,
+                        endpoint=endpoint,
+                    )
+                    await self._call_error_hooks_async(network_error, method, endpoint)
+                    raise network_error from e
+                except SideShiftException as e:
+                    # Call error hooks for SDK exceptions
+                    await self._call_error_hooks_async(e, method, endpoint)
+                    raise
+        except Exception as e:
+            # Handle any other exceptions and clean up deduplication
+            if self._enable_request_deduplication:
+                request_key = self._create_request_key(method, endpoint, params, json_data)
+                async with self._deduplication_lock:  # type: ignore[union-attr]
+                    if request_key in self._in_flight_requests:
+                        future_to_complete = self._in_flight_requests.pop(request_key)
+                        if not future_to_complete.done():
+                            future_to_complete.set_exception(e)
+            raise
 
     async def get(
         self,
