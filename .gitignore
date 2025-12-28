@@ -135,4 +135,5 @@ dmypy.json
 .pytest_cache/
 .coverage
 htmlcov/
+tmp/
 
