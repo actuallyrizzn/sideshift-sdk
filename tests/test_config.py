@@ -132,3 +132,67 @@ async def test_async_client_uses_config():
     async with AsyncSideShiftClient(secret="test-secret", timeout=60) as client:
         assert client.timeout == 60
 
+
+def test_get_max_connections_from_provided():
+    """Test getting max connections from provided value."""
+    assert SDKConfig.get_max_connections(20) == 20
+    assert SDKConfig.get_max_connections(5) == 5
+
+
+def test_get_max_connections_from_env():
+    """Test getting max connections from environment variable."""
+    with patch.dict(os.environ, {"SIDESHIFT_MAX_CONNECTIONS": "15"}):
+        assert SDKConfig.get_max_connections() == 15
+
+
+def test_get_max_connections_default():
+    """Test getting default max connections when nothing provided."""
+    with patch.dict(os.environ, {}, clear=True):
+        os.environ.pop("SIDESHIFT_MAX_CONNECTIONS", None)
+        assert SDKConfig.get_max_connections() == SDKConfig.DEFAULT_MAX_CONNECTIONS
+
+
+def test_get_max_keepalive_connections_from_provided():
+    """Test getting max keepalive connections from provided value."""
+    assert SDKConfig.get_max_keepalive_connections(10) == 10
+    assert SDKConfig.get_max_keepalive_connections(3) == 3
+
+
+def test_get_max_keepalive_connections_from_env():
+    """Test getting max keepalive connections from environment variable."""
+    with patch.dict(os.environ, {"SIDESHIFT_MAX_KEEPALIVE_CONNECTIONS": "8"}):
+        assert SDKConfig.get_max_keepalive_connections() == 8
+
+
+def test_get_max_keepalive_connections_default():
+    """Test getting default max keepalive connections when nothing provided."""
+    with patch.dict(os.environ, {}, clear=True):
+        os.environ.pop("SIDESHIFT_MAX_KEEPALIVE_CONNECTIONS", None)
+        assert SDKConfig.get_max_keepalive_connections() == SDKConfig.DEFAULT_MAX_KEEPALIVE_CONNECTIONS
+
+
+def test_client_uses_config_pooling():
+    """Test that client uses configurable connection pooling."""
+    client = SideShiftClient(secret="test-secret", max_connections=20, max_keepalive_connections=10)
+    assert client.max_connections == 20
+    assert client.max_keepalive_connections == 10
+
+
+def test_client_uses_env_pooling():
+    """Test that client uses connection pooling from environment variables."""
+    with patch.dict(os.environ, {"SIDESHIFT_MAX_CONNECTIONS": "15", "SIDESHIFT_MAX_KEEPALIVE_CONNECTIONS": "8"}):
+        client = SideShiftClient(secret="test-secret")
+        assert client.max_connections == 15
+        assert client.max_keepalive_connections == 8
+
+
+@pytest.mark.asyncio
+async def test_async_client_uses_config_pooling():
+    """Test that async client uses configurable connection pooling."""
+    async with AsyncSideShiftClient(secret="test-secret", max_connections=20, max_keepalive_connections=10) as client:
+        assert client.max_connections == 20
+        assert client.max_keepalive_connections == 10
+        # Verify client can be created with these settings
+        await client._get_client()
+        assert client._client is not None
+

@@ -17,6 +17,8 @@ class SDKConfig:
     DEFAULT_TIMEOUT = 30
     DEFAULT_MAX_RETRIES = 3
     DEFAULT_BASE_URL = BASE_URL
+    DEFAULT_MAX_CONNECTIONS = 10
+    DEFAULT_MAX_KEEPALIVE_CONNECTIONS = 5
 
     @staticmethod
     def get_timeout(provided: Optional[int] = None) -> int:
@@ -74,4 +76,44 @@ class SDKConfig:
         if env_url:
             return env_url
         return SDKConfig.DEFAULT_BASE_URL
+
+    @staticmethod
+    def get_max_connections(provided: Optional[int] = None) -> int:
+        """Get max connections value from provided value or environment variable.
+
+        Args:
+            provided: Max connections value provided directly (takes precedence)
+
+        Returns:
+            Maximum number of connections in pool
+        """
+        if provided is not None:
+            return provided
+        env_connections = os.getenv("SIDESHIFT_MAX_CONNECTIONS")
+        if env_connections:
+            try:
+                return int(env_connections)
+            except ValueError:
+                pass
+        return SDKConfig.DEFAULT_MAX_CONNECTIONS
+
+    @staticmethod
+    def get_max_keepalive_connections(provided: Optional[int] = None) -> int:
+        """Get max keepalive connections value from provided value or environment variable.
+
+        Args:
+            provided: Max keepalive connections value provided directly (takes precedence)
+
+        Returns:
+            Maximum number of keepalive connections in pool
+        """
+        if provided is not None:
+            return provided
+        env_keepalive = os.getenv("SIDESHIFT_MAX_KEEPALIVE_CONNECTIONS")
+        if env_keepalive:
+            try:
+                return int(env_keepalive)
+            except ValueError:
+                pass
+        return SDKConfig.DEFAULT_MAX_KEEPALIVE_CONNECTIONS
 

@@ -257,6 +257,8 @@ class SideShiftClient(BaseClient):
         user_ip: str | None = None,
         base_url: str | None = None,
         timeout: int | None = None,
+        max_connections: int | None = None,
+        max_keepalive_connections: int | None = None,
         enable_logging: bool = False,
         log_level: int | str | None = None,
     ):
@@ -268,12 +270,26 @@ class SideShiftClient(BaseClient):
             user_ip: End-user IP address
             base_url: Base URL for API (can also be set via SIDESHIFT_BASE_URL env var)
             timeout: Request timeout in seconds (can also be set via SIDESHIFT_TIMEOUT env var)
+            max_connections: Maximum number of connections in pool (can also be set via SIDESHIFT_MAX_CONNECTIONS env var)
+            max_keepalive_connections: Maximum number of keepalive connections (can also be set via SIDESHIFT_MAX_KEEPALIVE_CONNECTIONS env var)
             enable_logging: Whether to enable logging (default: False)
             log_level: Logging level if enable_logging is True (default: logging.INFO)
         """
         super().__init__(secret, affiliate_id, user_ip, base_url, enable_logging, log_level)
         self.timeout = SDKConfig.get_timeout(timeout)
+        self.max_connections = SDKConfig.get_max_connections(max_connections)
+        self.max_keepalive_connections = SDKConfig.get_max_keepalive_connections(max_keepalive_connections)
+        
+        # Configure connection pooling
         self._session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=self.max_connections,
+            pool_maxsize=self.max_connections,
+            max_retries=0,  # We handle retries ourselves
+            pool_block=False,
+        )
+        self._session.mount("http://", adapter)
+        self._session.mount("https://", adapter)
 
     def _request(
         self,
@@ -521,6 +537,8 @@ class AsyncSideShiftClient(BaseClient):
         user_ip: str | None = None,
         base_url: str | None = None,
         timeout: int | None = None,
+        max_connections: int | None = None,
+        max_keepalive_connections: int | None = None,
         enable_logging: bool = False,
         log_level: int | str | None = None,
     ):
@@ -532,11 +550,15 @@ class AsyncSideShiftClient(BaseClient):
             user_ip: End-user IP address
             base_url: Base URL for API (can also be set via SIDESHIFT_BASE_URL env var)
             timeout: Request timeout in seconds (can also be set via SIDESHIFT_TIMEOUT env var)
+            max_connections: Maximum number of connections in pool (can also be set via SIDESHIFT_MAX_CONNECTIONS env var)
+            max_keepalive_connections: Maximum number of keepalive connections (can also be set via SIDESHIFT_MAX_KEEPALIVE_CONNECTIONS env var)
             enable_logging: Whether to enable logging (default: False)
             log_level: Logging level if enable_logging is True (default: logging.INFO)
         """
         super().__init__(secret, affiliate_id, user_ip, base_url, enable_logging, log_level)
         self.timeout = SDKConfig.get_timeout(timeout)
+        self.max_connections = SDKConfig.get_max_connections(max_connections)
+        self.max_keepalive_connections = SDKConfig.get_max_keepalive_connections(max_keepalive_connections)
         self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -546,7 +568,11 @@ class AsyncSideShiftClient(BaseClient):
             Async HTTP client
         """
         if self._client is None:
-            self._client = httpx.AsyncClient(timeout=self.timeout)
+            limits = httpx.Limits(
+                max_connections=self.max_connections,
+                max_keepalive_connections=self.max_keepalive_connections,
+            )
+            self._client = httpx.AsyncClient(timeout=self.timeout, limits=limits)
         return self._client
 
     async def _request(
