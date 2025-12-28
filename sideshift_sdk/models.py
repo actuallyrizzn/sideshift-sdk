@@ -1,9 +1,24 @@
 """Pydantic models for SideShift API responses and requests."""
 
 from datetime import datetime
+from enum import Enum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+# ============================================================================
+# Enums
+# ============================================================================
+
+
+class ShiftStatus(str, Enum):
+    """Shift status values."""
+
+    WAITING = "waiting"
+    COMPLETE = "complete"
+    MULTIPLE = "multiple"
+    REFUNDED = "refunded"
 
 
 # ============================================================================
@@ -208,7 +223,7 @@ class Shift(BaseModel):
     deposit_amount: str | None = Field(None, alias="depositAmount", min_length=1)
     settle_amount: str | None = Field(None, alias="settleAmount", min_length=1)
     expires_at: datetime | None = Field(None, alias="expiresAt")
-    status: str = Field(..., min_length=1)
+    status: ShiftStatus = Field(...)
     average_shift_seconds: str | None = Field(None, alias="averageShiftSeconds", min_length=1)
     external_id: str | None = Field(None, alias="externalId", min_length=1)
     rate: str | None = Field(None, min_length=1)
