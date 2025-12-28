@@ -253,7 +253,8 @@ def test_client_handle_response_no_text():
 
 
 @patch("sideshift_sdk.client.requests.Session")
-def test_client_rate_limit_retry(mock_session_class):
+@patch("sideshift_sdk.client.time.sleep")
+def test_client_rate_limit_retry(mock_sleep, mock_session_class):
     """Test rate limit retry logic."""
     mock_session = Mock()
     mock_session_class.return_value = mock_session
@@ -262,6 +263,9 @@ def test_client_rate_limit_retry(mock_session_class):
     rate_limit_response = Mock()
     rate_limit_response.status_code = 429
     rate_limit_response.headers = {"Retry-After": "1"}
+    rate_limit_response.json.return_value = {"error": "Rate limited"}
+    rate_limit_response.text = '{"error": "Rate limited"}'
+    rate_limit_response.content = b'{"error": "Rate limited"}'
 
     success_response = Mock()
     success_response.status_code = 200
@@ -280,6 +284,7 @@ def test_client_rate_limit_retry(mock_session_class):
     result = client.get("/test")
     assert result == {"data": "success"}
     assert mock_session.request.call_count == 2
+    assert mock_sleep.called  # Verify sleep was called for retry
 
 
 def test_client_retry_after_header_parsing():

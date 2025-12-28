@@ -276,7 +276,8 @@ class TestErrorHandlingIntegration:
         assert "Invalid API secret" in exc_info.value.message
 
     @responses.activate
-    def test_rate_limit_with_retry(self, client, base_url):
+    @patch("sideshift_sdk.client.time.sleep")
+    def test_rate_limit_with_retry(self, mock_sleep, client, base_url):
         """Test rate limiting with retry logic."""
         # First request: rate limited
         responses.add(
@@ -311,6 +312,7 @@ class TestErrorHandlingIntegration:
         coins_list = coins.get_coins(client)
         assert len(coins_list) == 1
         assert coins_list[0].coin == "btc"
+        assert mock_sleep.called  # Verify sleep was called for retry
 
     @responses.activate
     def test_network_error_handling(self, client, base_url):

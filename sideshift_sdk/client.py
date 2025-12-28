@@ -628,6 +628,259 @@ class BaseClient:
                 endpoint=endpoint or "/",
             )
 
+    def _prepare_request(
+        self,
+        method: str,
+        endpoint: str,
+        params: JsonDict | None,
+        json_data: JsonDict | None,
+        headers: HeadersDict | None,
+        require_auth: bool,
+        require_user_ip: bool,
+        max_retries: int | None,
+        timeout: int | None,
+    ) -> tuple[str, str, HeadersDict, int, int]:
+        """Prepare request parameters (common for sync and async).
+
+        Args:
+            method: HTTP method
+            endpoint: API endpoint
+            params: Query parameters
+            json_data: JSON body data
+            headers: Additional headers
+            require_auth: Whether authentication is required
+            require_user_ip: Whether user IP header is required
+            max_retries: Maximum number of retries (if None, uses client-level)
+            timeout: Request timeout (if None, uses client-level)
+
+        Returns:
+            Tuple of (url, request_id, request_headers, retry_count, request_timeout)
+        """
+        # Use client-level max_retries if not provided, otherwise use provided value
+        retry_count = getattr(self, "max_retries", 3) if max_retries is None else max_retries
+        # Use client-level timeout if not provided, otherwise use provided value
+        request_timeout = getattr(self, "timeout", 30) if timeout is None else timeout
+        url = f"{self.base_url}{endpoint}"
+
+        # Generate request ID if not provided by user
+        request_id = None
+        if headers and HEADER_REQUEST_ID in headers:
+            request_id = headers[HEADER_REQUEST_ID]
+        else:
+            request_id = str(uuid.uuid4())
+
+        # Get SDK headers with request ID
+        sdk_headers = self._get_headers(
+            include_secret=require_auth, include_user_ip=require_user_ip, request_id=request_id
+        )
+
+        # Merge user headers (protected headers will be ignored)
+        request_headers = self._merge_headers(sdk_headers, headers)
+
+        # Validate request body is JSON-serializable
+        self._validate_request_body(json_data, method, endpoint, request_id)
+
+        # Validate request body size if json_data is provided
+        max_request_size = getattr(self, "max_request_size", None)
+        if json_data is not None and max_request_size is not None:
+            try:
+                request_body = json.dumps(json_data)
+                request_size = len(request_body.encode("utf-8"))
+                if request_size > max_request_size:
+                    error_msg = (
+                        f"Request body size ({request_size} bytes) exceeds maximum allowed size "
+                        f"({max_request_size} bytes)"
+                    )
+                    if self._enable_logging:
+                        self._logger.error(f"{error_msg} [Request-ID: {request_id}]")
+                    raise SideShiftSizeLimitError(
+                        error_msg,
+                        response_data={"request_id": request_id, "size": request_size, "max_size": max_request_size} if request_id else {"size": request_size, "max_size": max_request_size},
+                        request_id=request_id,
+                        method=method,
+                        endpoint=endpoint,
+                    )
+            except (TypeError, ValueError) as e:
+                # If JSON serialization fails, let the request library handle it
+                if self._enable_logging:
+                    self._logger.warning(f"Could not validate request size: {e}")
+
+        return url, request_id, request_headers, retry_count, request_timeout
+
+    def _log_request_start(
+        self, method: str, endpoint: str, params: JsonDict | None, request_id: str, attempt: int, retry_count: int
+    ) -> None:
+        """Log request start (common for sync and async).
+
+        Args:
+            method: HTTP method
+            endpoint: API endpoint
+            params: Query parameters
+            request_id: Request ID
+            attempt: Current attempt number (0-based)
+            retry_count: Maximum retry count
+        """
+        if self._enable_logging:
+            self._logger.debug(
+                f"Request: {method} {endpoint} (attempt {attempt + 1}/{retry_count + 1}) [Request-ID: {request_id}]"
+            )
+            if params:
+                self._logger.debug(f"  Params: {params}")
+
+    def _log_response(
+        self, method: str, endpoint: str, status_code: int, request_id: str, response_request_id: str | None
+    ) -> None:
+        """Log response (common for sync and async).
+
+        Args:
+            method: HTTP method
+            endpoint: API endpoint
+            status_code: Response status code
+            request_id: Request ID
+            response_request_id: Request ID from response headers (if different)
+        """
+        if self._enable_logging:
+            log_msg = f"Response: {method} {endpoint} - {status_code} [Request-ID: {request_id}]"
+            if response_request_id and response_request_id != request_id:
+                log_msg += f" [Response-Request-ID: {response_request_id}]"
+            self._logger.debug(log_msg)
+
+    def _calculate_retry_wait_time(self, rate_limit_error: SideShiftRateLimitError, attempt: int) -> float:
+        """Calculate wait time before retry (common for sync and async).
+
+        Args:
+            rate_limit_error: The rate limit error that occurred
+            attempt: Current attempt number (0-based)
+
+        Returns:
+            Wait time in seconds
+        """
+        # Use Retry-After header value if available, otherwise use exponential backoff
+        retry_after = None
+        if rate_limit_error.response_data and "retry_after" in rate_limit_error.response_data:
+            retry_after = rate_limit_error.response_data.get("retry_after")
+
+        if retry_after is not None and retry_after > 0:
+            wait_time = float(retry_after)
+            if self._enable_logging:
+                self._logger.debug(f"Retrying after {wait_time:.2f}s (from Retry-After header)")
+        else:
+            wait_time = exponential_backoff(attempt)
+            if self._enable_logging:
+                self._logger.debug(f"Retrying after {wait_time:.2f}s (exponential backoff)")
+        return wait_time
+
+    def _call_request_hooks(
+        self, method: str, endpoint: str, params: JsonDict | None, json_data: JsonDict | None, request_headers: HeadersDict
+    ) -> None:
+        """Call request hooks (sync version).
+
+        Args:
+            method: HTTP method
+            endpoint: API endpoint
+            params: Query parameters
+            json_data: JSON body data
+            request_headers: Request headers
+        """
+        for hook in self._request_hooks:
+            try:
+                hook(method, endpoint, params, json_data, request_headers)
+            except Exception as hook_error:
+                # Don't let hook errors break the request
+                if self._enable_logging:
+                    self._logger.warning(f"Request hook error: {hook_error}")
+
+    async def _call_request_hooks_async(
+        self, method: str, endpoint: str, params: JsonDict | None, json_data: JsonDict | None, request_headers: HeadersDict
+    ) -> None:
+        """Call request hooks (async version, supports both sync and async hooks).
+
+        Args:
+            method: HTTP method
+            endpoint: API endpoint
+            params: Query parameters
+            json_data: JSON body data
+            request_headers: Request headers
+        """
+        for hook in self._request_hooks:
+            try:
+                if inspect.iscoroutinefunction(hook):
+                    await hook(method, endpoint, params, json_data, request_headers)
+                else:
+                    hook(method, endpoint, params, json_data, request_headers)
+            except Exception as hook_error:
+                # Don't let hook errors break the request
+                if self._enable_logging:
+                    self._logger.warning(f"Request hook error: {hook_error}")
+
+    def _call_response_hooks(self, method: str, endpoint: str, response_data: JsonDict) -> None:
+        """Call response hooks (sync version).
+
+        Args:
+            method: HTTP method
+            endpoint: API endpoint
+            response_data: Response data
+        """
+        for hook in self._response_hooks:
+            try:
+                hook(method, endpoint, response_data)
+            except Exception as hook_error:
+                # Don't let hook errors break the response
+                if self._enable_logging:
+                    self._logger.warning(f"Response hook error: {hook_error}")
+
+    async def _call_response_hooks_async(self, method: str, endpoint: str, response_data: JsonDict) -> None:
+        """Call response hooks (async version, supports both sync and async hooks).
+
+        Args:
+            method: HTTP method
+            endpoint: API endpoint
+            response_data: Response data
+        """
+        for hook in self._response_hooks:
+            try:
+                if inspect.iscoroutinefunction(hook):
+                    await hook(method, endpoint, response_data)
+                else:
+                    hook(method, endpoint, response_data)
+            except Exception as hook_error:
+                # Don't let hook errors break the response
+                if self._enable_logging:
+                    self._logger.warning(f"Response hook error: {hook_error}")
+
+    def _call_error_hooks(self, error: Exception, method: str, endpoint: str) -> None:
+        """Call error hooks (sync version).
+
+        Args:
+            error: The exception that occurred
+            method: HTTP method
+            endpoint: API endpoint
+        """
+        for hook in self._error_hooks:
+            try:
+                hook(error, method, endpoint)
+            except Exception as hook_error:
+                if self._enable_logging:
+                    self._logger.warning(f"Error hook error: {hook_error}")
+
+    async def _call_error_hooks_async(self, error: Exception, method: str, endpoint: str) -> None:
+        """Call error hooks (async version, supports both sync and async hooks).
+
+        Args:
+            error: The exception that occurred
+            method: HTTP method
+            endpoint: API endpoint
+        """
+        for hook in self._error_hooks:
+            try:
+                if inspect.iscoroutinefunction(hook):
+                    await hook(error, method, endpoint)
+                else:
+                    hook(error, method, endpoint)
+            except Exception as hook_error:
+                if self._enable_logging:
+                    self._logger.warning(f"Error hook error: {hook_error}")
+
 
 class SideShiftClient(BaseClient):
     """Synchronous client for SideShift API."""
@@ -722,72 +975,17 @@ class SideShiftClient(BaseClient):
         Returns:
             Response JSON data
         """
-        # Use client-level max_retries if not provided, otherwise use provided value
-        retry_count = self.max_retries if max_retries is None else max_retries
-        # Use client-level timeout if not provided, otherwise use provided value
-        request_timeout = self.timeout if timeout is None else timeout
-        url = f"{self.base_url}{endpoint}"
-        
-        # Generate request ID if not provided by user
-        request_id = None
-        if headers and HEADER_REQUEST_ID in headers:
-            request_id = headers[HEADER_REQUEST_ID]
-        else:
-            request_id = str(uuid.uuid4())
-        
-        # Get SDK headers with request ID
-        sdk_headers = self._get_headers(
-            include_secret=require_auth, include_user_ip=require_user_ip, request_id=request_id
+        # Prepare request (common logic)
+        url, request_id, request_headers, retry_count, request_timeout = self._prepare_request(
+            method, endpoint, params, json_data, headers, require_auth, require_user_ip, max_retries, timeout
         )
-        
-        # Merge user headers (protected headers will be ignored)
-        request_headers = self._merge_headers(sdk_headers, headers)
-
-        # Validate request body is JSON-serializable
-        self._validate_request_body(json_data, method, endpoint, request_id)
-
-        # Validate request body size if json_data is provided
-        if json_data is not None and self.max_request_size is not None:
-            try:
-                request_body = json.dumps(json_data)
-                request_size = len(request_body.encode("utf-8"))
-                if request_size > self.max_request_size:
-                    error_msg = (
-                        f"Request body size ({request_size} bytes) exceeds maximum allowed size "
-                        f"({self.max_request_size} bytes)"
-                    )
-                    if self._enable_logging:
-                        self._logger.error(f"{error_msg} [Request-ID: {request_id}]")
-                    raise SideShiftSizeLimitError(
-                        error_msg,
-                        response_data={"request_id": request_id, "size": request_size, "max_size": self.max_request_size} if request_id else {"size": request_size, "max_size": self.max_request_size},
-                        request_id=request_id,
-                        method=method,
-                        endpoint=endpoint,
-                    )
-            except (TypeError, ValueError) as e:
-                # If JSON serialization fails, let the request library handle it
-                if self._enable_logging:
-                    self._logger.warning(f"Could not validate request size: {e}")
 
         for attempt in range(retry_count + 1):
             try:
-                if self._enable_logging:
-                    self._logger.debug(
-                        f"Request: {method} {endpoint} (attempt {attempt + 1}/{retry_count + 1}) [Request-ID: {request_id}]"
-                    )
-                    if params:
-                        self._logger.debug(f"  Params: {params}")
-                
-                # Call request hooks
-                for hook in self._request_hooks:
-                    try:
-                        hook(method, endpoint, params, json_data, request_headers)
-                    except Exception as hook_error:
-                        # Don't let hook errors break the request
-                        if self._enable_logging:
-                            self._logger.warning(f"Request hook error: {hook_error}")
-                
+                self._log_request_start(method, endpoint, params, request_id, attempt, retry_count)
+                self._call_request_hooks(method, endpoint, params, json_data, request_headers)
+
+                # Make HTTP request (sync-specific)
                 response = self._session.request(
                     method=method,
                     url=url,
@@ -801,30 +999,17 @@ class SideShiftClient(BaseClient):
 
                 # Extract request ID from response headers if present (API may echo it back)
                 response_request_id = response.headers.get(HEADER_REQUEST_ID.lower()) or response.headers.get(HEADER_REQUEST_ID)
-                
-                if self._enable_logging:
-                    log_msg = f"Response: {method} {endpoint} - {response.status_code} [Request-ID: {request_id}]"
-                    if response_request_id and response_request_id != request_id:
-                        log_msg += f" [Response-Request-ID: {response_request_id}]"
-                    self._logger.debug(log_msg)
+                self._log_response(method, endpoint, response.status_code, request_id, response_request_id)
 
                 response_data = self._handle_response(
-                    response, 
-                    request_id=request_id, 
-                    method=method, 
+                    response,
+                    request_id=request_id,
+                    method=method,
                     endpoint=endpoint,
                     max_response_size=self.max_response_size,
                 )
-                
-                # Call response hooks
-                for hook in self._response_hooks:
-                    try:
-                        hook(method, endpoint, response_data)
-                    except Exception as hook_error:
-                        # Don't let hook errors break the response
-                        if self._enable_logging:
-                            self._logger.warning(f"Response hook error: {hook_error}")
-                
+
+                self._call_response_hooks(method, endpoint, response_data)
                 return response_data
 
             except SideShiftRateLimitError as rate_limit_error:
@@ -833,19 +1018,7 @@ class SideShiftClient(BaseClient):
                         f"Rate limit exceeded for {method} {endpoint} (attempt {attempt + 1}/{retry_count + 1}) [Request-ID: {request_id}]"
                     )
                 if attempt < retry_count:
-                    # Use Retry-After header value if available, otherwise use exponential backoff
-                    retry_after = None
-                    if rate_limit_error.response_data and "retry_after" in rate_limit_error.response_data:
-                        retry_after = rate_limit_error.response_data.get("retry_after")
-                    
-                    if retry_after is not None and retry_after > 0:
-                        wait_time = float(retry_after)
-                        if self._enable_logging:
-                            self._logger.debug(f"Retrying after {wait_time:.2f}s (from Retry-After header)")
-                    else:
-                        wait_time = exponential_backoff(attempt)
-                        if self._enable_logging:
-                            self._logger.debug(f"Retrying after {wait_time:.2f}s (exponential backoff)")
+                    wait_time = self._calculate_retry_wait_time(rate_limit_error, attempt)
                     time.sleep(wait_time)
                     continue
                 raise
@@ -863,13 +1036,7 @@ class SideShiftClient(BaseClient):
                     method=method,
                     endpoint=endpoint,
                 )
-                # Call error hooks
-                for hook in self._error_hooks:
-                    try:
-                        hook(network_error, method, endpoint)
-                    except Exception as hook_error:
-                        if self._enable_logging:
-                            self._logger.warning(f"Error hook error: {hook_error}")
+                self._call_error_hooks(network_error, method, endpoint)
                 raise network_error from e
             except requests.exceptions.RequestException as e:
                 # Other requests exceptions (DNS, SSL, etc.)
@@ -882,22 +1049,11 @@ class SideShiftClient(BaseClient):
                     method=method,
                     endpoint=endpoint,
                 )
-                # Call error hooks
-                for hook in self._error_hooks:
-                    try:
-                        hook(network_error, method, endpoint)
-                    except Exception as hook_error:
-                        if self._enable_logging:
-                            self._logger.warning(f"Error hook error: {hook_error}")
+                self._call_error_hooks(network_error, method, endpoint)
                 raise network_error from e
             except SideShiftException as e:
                 # Call error hooks for SDK exceptions
-                for hook in self._error_hooks:
-                    try:
-                        hook(e, method, endpoint)
-                    except Exception as hook_error:
-                        if self._enable_logging:
-                            self._logger.warning(f"Error hook error: {hook_error}")
+                self._call_error_hooks(e, method, endpoint)
                 raise
 
     def get(
@@ -1187,77 +1343,19 @@ class AsyncSideShiftClient(BaseClient):
         Returns:
             Response JSON data
         """
-        # Use client-level max_retries if not provided, otherwise use provided value
-        retry_count = self.max_retries if max_retries is None else max_retries
-        # Use client-level timeout if not provided, otherwise use provided value
-        request_timeout = self.timeout if timeout is None else timeout
-        url = f"{self.base_url}{endpoint}"
-        
-        # Generate request ID if not provided by user
-        request_id = None
-        if headers and HEADER_REQUEST_ID in headers:
-            request_id = headers[HEADER_REQUEST_ID]
-        else:
-            request_id = str(uuid.uuid4())
-        
-        # Get SDK headers with request ID
-        sdk_headers = self._get_headers(
-            include_secret=require_auth, include_user_ip=require_user_ip, request_id=request_id
+        # Prepare request (common logic)
+        url, request_id, request_headers, retry_count, request_timeout = self._prepare_request(
+            method, endpoint, params, json_data, headers, require_auth, require_user_ip, max_retries, timeout
         )
-        
-        # Merge user headers (protected headers will be ignored)
-        request_headers = self._merge_headers(sdk_headers, headers)
-
-        # Validate request body is JSON-serializable
-        self._validate_request_body(json_data, method, endpoint, request_id)
-
-        # Validate request body size if json_data is provided
-        if json_data is not None and self.max_request_size is not None:
-            try:
-                request_body = json.dumps(json_data)
-                request_size = len(request_body.encode("utf-8"))
-                if request_size > self.max_request_size:
-                    error_msg = (
-                        f"Request body size ({request_size} bytes) exceeds maximum allowed size "
-                        f"({self.max_request_size} bytes)"
-                    )
-                    if self._enable_logging:
-                        self._logger.error(f"{error_msg} [Request-ID: {request_id}]")
-                    raise SideShiftSizeLimitError(
-                        error_msg,
-                        response_data={"request_id": request_id, "size": request_size, "max_size": self.max_request_size} if request_id else {"size": request_size, "max_size": self.max_request_size},
-                        request_id=request_id,
-                        method=method,
-                        endpoint=endpoint,
-                    )
-            except (TypeError, ValueError) as e:
-                # If JSON serialization fails, let the request library handle it
-                if self._enable_logging:
-                    self._logger.warning(f"Could not validate request size: {e}")
 
         client = await self._get_client()
 
         for attempt in range(retry_count + 1):
             try:
-                if self._enable_logging:
-                    self._logger.debug(
-                        f"Request: {method} {endpoint} (attempt {attempt + 1}/{retry_count + 1}) [Request-ID: {request_id}]"
-                    )
-                    if params:
-                        self._logger.debug(f"  Params: {params}")
-                
-                # Call request hooks (support both sync and async)
-                for hook in self._request_hooks:
-                    try:
-                        if inspect.iscoroutinefunction(hook):
-                            await hook(method, endpoint, params, json_data, request_headers)
-                        else:
-                            hook(method, endpoint, params, json_data, request_headers)
-                    except Exception as hook_error:
-                        # Don't let hook errors break the request
-                        if self._enable_logging:
-                            self._logger.warning(f"Request hook error: {hook_error}")
-                
+                self._log_request_start(method, endpoint, params, request_id, attempt, retry_count)
+                await self._call_request_hooks_async(method, endpoint, params, json_data, request_headers)
+
+                # Make HTTP request (async-specific)
                 response = await client.request(
                     method=method,
                     url=url,
@@ -1269,33 +1367,17 @@ class AsyncSideShiftClient(BaseClient):
 
                 # Extract request ID from response headers if present (API may echo it back)
                 response_request_id = response.headers.get(HEADER_REQUEST_ID.lower()) or response.headers.get(HEADER_REQUEST_ID)
-                
-                if self._enable_logging:
-                    log_msg = f"Response: {method} {endpoint} - {response.status_code} [Request-ID: {request_id}]"
-                    if response_request_id and response_request_id != request_id:
-                        log_msg += f" [Response-Request-ID: {response_request_id}]"
-                    self._logger.debug(log_msg)
+                self._log_response(method, endpoint, response.status_code, request_id, response_request_id)
 
                 response_data = self._handle_response(
-                    response, 
-                    request_id=request_id, 
-                    method=method, 
+                    response,
+                    request_id=request_id,
+                    method=method,
                     endpoint=endpoint,
                     max_response_size=self.max_response_size,
                 )
-                
-                # Call response hooks (support both sync and async)
-                for hook in self._response_hooks:
-                    try:
-                        if inspect.iscoroutinefunction(hook):
-                            await hook(method, endpoint, response_data)
-                        else:
-                            hook(method, endpoint, response_data)
-                    except Exception as hook_error:
-                        # Don't let hook errors break the response
-                        if self._enable_logging:
-                            self._logger.warning(f"Response hook error: {hook_error}")
-                
+
+                await self._call_response_hooks_async(method, endpoint, response_data)
                 return response_data
 
             except SideShiftRateLimitError as rate_limit_error:
@@ -1304,19 +1386,7 @@ class AsyncSideShiftClient(BaseClient):
                         f"Rate limit exceeded for {method} {endpoint} (attempt {attempt + 1}/{retry_count + 1}) [Request-ID: {request_id}]"
                     )
                 if attempt < retry_count:
-                    # Use Retry-After header value if available, otherwise use exponential backoff
-                    retry_after = None
-                    if rate_limit_error.response_data and "retry_after" in rate_limit_error.response_data:
-                        retry_after = rate_limit_error.response_data.get("retry_after")
-                    
-                    if retry_after is not None and retry_after > 0:
-                        wait_time = float(retry_after)
-                        if self._enable_logging:
-                            self._logger.debug(f"Retrying after {wait_time:.2f}s (from Retry-After header)")
-                    else:
-                        wait_time = exponential_backoff(attempt)
-                        if self._enable_logging:
-                            self._logger.debug(f"Retrying after {wait_time:.2f}s (exponential backoff)")
+                    wait_time = self._calculate_retry_wait_time(rate_limit_error, attempt)
                     await asyncio.sleep(wait_time)
                     continue
                 raise
@@ -1350,28 +1420,11 @@ class AsyncSideShiftClient(BaseClient):
                     method=method,
                     endpoint=endpoint,
                 )
-                # Call error hooks (support both sync and async)
-                for hook in self._error_hooks:
-                    try:
-                        if inspect.iscoroutinefunction(hook):
-                            await hook(network_error, method, endpoint)
-                        else:
-                            hook(network_error, method, endpoint)
-                    except Exception as hook_error:
-                        if self._enable_logging:
-                            self._logger.warning(f"Error hook error: {hook_error}")
+                await self._call_error_hooks_async(network_error, method, endpoint)
                 raise network_error from e
             except SideShiftException as e:
-                # Call error hooks for SDK exceptions (support both sync and async)
-                for hook in self._error_hooks:
-                    try:
-                        if inspect.iscoroutinefunction(hook):
-                            await hook(e, method, endpoint)
-                        else:
-                            hook(e, method, endpoint)
-                    except Exception as hook_error:
-                        if self._enable_logging:
-                            self._logger.warning(f"Error hook error: {hook_error}")
+                # Call error hooks for SDK exceptions
+                await self._call_error_hooks_async(e, method, endpoint)
                 raise
 
     async def get(

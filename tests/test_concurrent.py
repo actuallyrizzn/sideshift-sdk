@@ -325,6 +325,9 @@ class TestConcurrentRateLimiting:
     @pytest.mark.asyncio
     async def test_concurrent_requests_rate_limiting(self, async_client, base_url):
         """Test rate limiting when multiple requests are made concurrently."""
+        # Disable retries for this test - we want to see rate limit errors immediately
+        async_client.max_retries = 0
+        
         async with async_client:
             # First request succeeds, subsequent ones get rate limited
             mock_success_response = Mock()
@@ -373,8 +376,12 @@ class TestConcurrentRateLimiting:
                 assert isinstance(results[2], SideShiftRateLimitError)
 
     @responses.activate
-    def test_concurrent_rate_limiting_sync(self, client, base_url):
+    @patch("sideshift_sdk.client.time.sleep")
+    def test_concurrent_rate_limiting_sync(self, mock_sleep, client, base_url):
         """Test rate limiting with concurrent sync requests."""
+        # Disable retries for this test - we want to see rate limit errors immediately
+        client.max_retries = 0
+        
         # First request succeeds
         responses.add(
             responses.GET,
