@@ -592,7 +592,7 @@ class SideShiftClient(BaseClient):
         )
 
         if response.status_code != 200:
-            self._handle_response(response, method=method, endpoint=endpoint)
+            self._handle_response(response, method="GET", endpoint=endpoint)
             return b""
 
         return response.content
