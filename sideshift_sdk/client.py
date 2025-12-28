@@ -237,8 +237,6 @@ class SideShiftClient(BaseClient):
                     continue
                 raise
 
-        raise SideShiftException("Max retries exceeded")
-
     def get(
         self,
         endpoint: str,
@@ -399,8 +397,6 @@ class AsyncSideShiftClient(BaseClient):
                     await asyncio.sleep(wait_time)
                     continue
                 raise
-
-        raise SideShiftException("Max retries exceeded")
 
     async def get(
         self,
