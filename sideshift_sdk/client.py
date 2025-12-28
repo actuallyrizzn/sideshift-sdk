@@ -261,6 +261,63 @@ class BaseClient:
         if hook in self._error_hooks:
             self._error_hooks.remove(hook)
 
+    def _validate_request_body(
+        self,
+        json_data: JsonDict | None,
+        method: str,
+        endpoint: str,
+        request_id: str | None = None,
+    ) -> None:
+        """Validate that request body is JSON-serializable.
+
+        Args:
+            json_data: Request body data to validate
+            method: HTTP method for error context
+            endpoint: API endpoint for error context
+            request_id: Request ID for correlation tracking
+
+        Raises:
+            SideShiftAPIError: If the request body is invalid or not JSON-serializable
+        """
+        if json_data is None:
+            return  # None is valid (no body)
+
+        # Check that json_data is a dictionary
+        if not isinstance(json_data, dict):
+            error_msg = (
+                f"Request body must be a dictionary, got {type(json_data).__name__}. "
+                f"JSON-serializable dictionaries are required for request bodies."
+            )
+            if self._enable_logging:
+                self._logger.error(f"{error_msg} [Request-ID: {request_id}]")
+            raise SideShiftAPIError(
+                error_msg,
+                status_code=400,
+                response_data={"request_id": request_id} if request_id else None,
+                request_id=request_id,
+                method=method,
+                endpoint=endpoint,
+            )
+
+        # Attempt JSON serialization to catch serialization errors early
+        try:
+            json.dumps(json_data)
+        except (TypeError, ValueError) as e:
+            error_msg = (
+                f"Request body is not JSON-serializable: {str(e)}. "
+                f"Ensure all values in the request body are JSON-serializable (str, int, float, bool, None, dict, list)."
+            )
+            if self._enable_logging:
+                self._logger.error(f"{error_msg} [Request-ID: {request_id}]")
+            raise SideShiftAPIError(
+                error_msg,
+                status_code=400,
+                response_data={"request_id": request_id, "serialization_error": str(e)} if request_id else {"serialization_error": str(e)},
+                request_id=request_id,
+                method=method,
+                endpoint=endpoint,
+            ) from e
+
     def _handle_response(
         self,
         response: requests.Response | httpx.Response,
@@ -584,6 +641,9 @@ class SideShiftClient(BaseClient):
         
         # Merge user headers (protected headers will be ignored)
         request_headers = self._merge_headers(sdk_headers, headers)
+
+        # Validate request body is JSON-serializable
+        self._validate_request_body(json_data, method, endpoint, request_id)
 
         # Validate request body size if json_data is provided
         if json_data is not None and self.max_request_size is not None:
@@ -1046,6 +1106,9 @@ class AsyncSideShiftClient(BaseClient):
         
         # Merge user headers (protected headers will be ignored)
         request_headers = self._merge_headers(sdk_headers, headers)
+
+        # Validate request body is JSON-serializable
+        self._validate_request_body(json_data, method, endpoint, request_id)
 
         # Validate request body size if json_data is provided
         if json_data is not None and self.max_request_size is not None:

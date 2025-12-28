@@ -32,3 +32,4 @@ Added comprehensive error handling to both `__aexit__` (async) and `__exit__` (s
 
 All existing tests pass, and new tests verify the error handling behavior.
 
+

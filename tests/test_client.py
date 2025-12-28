@@ -450,3 +450,90 @@ async def test_async_client_network_error():
     assert "Network error" in exc_info.value.message
     # Check that exception chaining is preserved
     assert exc_info.value.__cause__ is not None
+
+
+def test_client_validate_request_body_none():
+    """Test that None request body passes validation."""
+    client = SideShiftClient(secret="test-secret")
+    
+    # None should pass validation (no body)
+    client._validate_request_body(None, "POST", "/test")
+
+
+def test_client_validate_request_body_valid_dict():
+    """Test that valid dictionary passes validation."""
+    client = SideShiftClient(secret="test-secret")
+    
+    # Valid dict should pass validation
+    valid_data = {"key": "value", "number": 123, "bool": True, "null": None, "list": [1, 2, 3]}
+    client._validate_request_body(valid_data, "POST", "/test")
+
+
+def test_client_validate_request_body_invalid_type():
+    """Test that non-dict types raise SideShiftAPIError."""
+    client = SideShiftClient(secret="test-secret")
+    
+    # String should raise error
+    with pytest.raises(SideShiftAPIError) as exc_info:
+        client._validate_request_body("not a dict", "POST", "/test")
+    assert exc_info.value.status_code == 400
+    assert "must be a dictionary" in exc_info.value.message
+    
+    # List should raise error
+    with pytest.raises(SideShiftAPIError) as exc_info:
+        client._validate_request_body(["not", "a", "dict"], "POST", "/test")
+    assert exc_info.value.status_code == 400
+    assert "must be a dictionary" in exc_info.value.message
+    
+    # Integer should raise error
+    with pytest.raises(SideShiftAPIError) as exc_info:
+        client._validate_request_body(123, "POST", "/test")
+    assert exc_info.value.status_code == 400
+    assert "must be a dictionary" in exc_info.value.message
+
+
+def test_client_validate_request_body_non_serializable():
+    """Test that non-JSON-serializable data raises SideShiftAPIError."""
+    client = SideShiftClient(secret="test-secret")
+    
+    # Function is not JSON-serializable
+    def some_function():
+        pass
+    
+    with pytest.raises(SideShiftAPIError) as exc_info:
+        client._validate_request_body({"func": some_function}, "POST", "/test")
+    assert exc_info.value.status_code == 400
+    assert "not JSON-serializable" in exc_info.value.message
+    assert exc_info.value.__cause__ is not None  # Exception chaining
+    
+    # Class instance is not JSON-serializable
+    class SomeClass:
+        pass
+    
+    with pytest.raises(SideShiftAPIError) as exc_info:
+        client._validate_request_body({"obj": SomeClass()}, "POST", "/test")
+    assert exc_info.value.status_code == 400
+    assert "not JSON-serializable" in exc_info.value.message
+
+
+def test_client_validate_request_body_in_request():
+    """Test that request body validation is called in _request method."""
+    client = SideShiftClient(secret="test-secret")
+    
+    # Invalid type should be caught before making HTTP request
+    with pytest.raises(SideShiftAPIError) as exc_info:
+        client._request("POST", "/test", json_data="not a dict")
+    assert exc_info.value.status_code == 400
+    assert "must be a dictionary" in exc_info.value.message
+
+
+@pytest.mark.asyncio
+async def test_async_client_validate_request_body_in_request():
+    """Test that request body validation is called in async _request method."""
+    client = AsyncSideShiftClient(secret="test-secret")
+    
+    # Invalid type should be caught before making HTTP request
+    with pytest.raises(SideShiftAPIError) as exc_info:
+        await client._request("POST", "/test", json_data="not a dict")
+    assert exc_info.value.status_code == 400
+    assert "must be a dictionary" in exc_info.value.message

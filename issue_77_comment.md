@@ -44,3 +44,4 @@ response = client.get("/coins", timeout=5)   # Uses 5 second timeout
 
 All existing tests pass, confirming backward compatibility.
 
+
