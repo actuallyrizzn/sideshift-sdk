@@ -64,6 +64,7 @@ Issues = "https://github.com/actuallyrizzn/sideshift-sdk/issues"
 
 [tool.setuptools]
 packages = ["sideshift_sdk", "sideshift_sdk.endpoints"]
+package-data = {"sideshift_sdk" = ["py.typed"]}
 
 [tool.black]
 line-length = 100
