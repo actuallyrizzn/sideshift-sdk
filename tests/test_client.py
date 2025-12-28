@@ -44,6 +44,7 @@ def test_client_get_headers():
     assert headers["x-user-ip"] == "1.2.3.4"
     assert headers["Content-Type"] == "application/json; charset=utf-8"
     assert headers["Accept"] == "application/json; charset=utf-8"
+    assert headers["Accept-Encoding"] == "gzip, deflate"
 
 
 def test_client_handle_response_success():

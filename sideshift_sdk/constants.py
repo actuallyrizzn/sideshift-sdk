@@ -11,6 +11,7 @@ SUPPORTED_API_VERSIONS = ["v2"]
 # HTTP Headers
 HEADER_CONTENT_TYPE = "Content-Type"
 HEADER_ACCEPT = "Accept"
+HEADER_ACCEPT_ENCODING = "Accept-Encoding"
 HEADER_USER_AGENT = "User-Agent"
 HEADER_SIDESHIFT_SECRET = "x-sideshift-secret"
 HEADER_USER_IP = "x-user-ip"

@@ -19,6 +19,7 @@ from sideshift_sdk.constants import (
     BASE_URL,
     CONTENT_TYPE_JSON,
     HEADER_ACCEPT,
+    HEADER_ACCEPT_ENCODING,
     HEADER_CONTENT_TYPE,
     HEADER_REQUEST_ID,
     HEADER_SIDESHIFT_SECRET,
@@ -144,6 +145,7 @@ class BaseClient:
         headers = {
             HEADER_CONTENT_TYPE: f"{CONTENT_TYPE_JSON}; charset=utf-8",
             HEADER_ACCEPT: f"{CONTENT_TYPE_JSON}; charset=utf-8",
+            HEADER_ACCEPT_ENCODING: "gzip, deflate",
             HEADER_USER_AGENT: f"sideshift-sdk-python/{__version__}",
         }
 
