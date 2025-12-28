@@ -27,6 +27,7 @@ from sideshift_sdk.exceptions import (
     SideShiftNotFoundError,
     SideShiftRateLimitError,
 )
+from sideshift_sdk.config import SDKConfig
 from sideshift_sdk.logging_config import get_logger
 from sideshift_sdk.utils import exponential_backoff
 
@@ -69,7 +70,7 @@ class BaseClient:
         self.secret = secret or os.getenv("SIDESHIFT_SECRET")
         self.affiliate_id = affiliate_id or os.getenv("AFFILIATE_ID")
         self.user_ip = user_ip or os.getenv("SIDESHIFT_USER_IP")
-        self.base_url = base_url or self.BASE_URL
+        self.base_url = SDKConfig.get_base_url(base_url)
         self._logger = get_logger()
         self._enable_logging = enable_logging
         
@@ -255,7 +256,7 @@ class SideShiftClient(BaseClient):
         affiliate_id: str | None = None,
         user_ip: str | None = None,
         base_url: str | None = None,
-        timeout: int = 30,
+        timeout: int | None = None,
         enable_logging: bool = False,
         log_level: int | str | None = None,
     ):
@@ -265,13 +266,13 @@ class SideShiftClient(BaseClient):
             secret: SideShift account secret
             affiliate_id: Affiliate ID
             user_ip: End-user IP address
-            base_url: Base URL for API
-            timeout: Request timeout in seconds
+            base_url: Base URL for API (can also be set via SIDESHIFT_BASE_URL env var)
+            timeout: Request timeout in seconds (can also be set via SIDESHIFT_TIMEOUT env var)
             enable_logging: Whether to enable logging (default: False)
             log_level: Logging level if enable_logging is True (default: logging.INFO)
         """
         super().__init__(secret, affiliate_id, user_ip, base_url, enable_logging, log_level)
-        self.timeout = timeout
+        self.timeout = SDKConfig.get_timeout(timeout)
         self._session = requests.Session()
 
     def _request(
@@ -283,7 +284,7 @@ class SideShiftClient(BaseClient):
         headers: HeadersDict | None = None,
         require_auth: bool = False,
         require_user_ip: bool = False,
-        max_retries: int = 3,
+        max_retries: int | None = None,
     ) -> JsonDict:
         """Make HTTP request with retry logic.
 
@@ -295,11 +296,12 @@ class SideShiftClient(BaseClient):
             headers: Additional headers
             require_auth: Whether authentication is required
             require_user_ip: Whether user IP header is required
-            max_retries: Maximum number of retries for rate limits
+            max_retries: Maximum number of retries for rate limits (can also be set via SIDESHIFT_MAX_RETRIES env var)
 
         Returns:
             Response JSON data
         """
+        max_retries = SDKConfig.get_max_retries(max_retries)
         url = f"{self.base_url}{endpoint}"
         request_headers = self._get_headers(
             include_secret=require_auth, include_user_ip=require_user_ip
@@ -518,7 +520,7 @@ class AsyncSideShiftClient(BaseClient):
         affiliate_id: str | None = None,
         user_ip: str | None = None,
         base_url: str | None = None,
-        timeout: int = 30,
+        timeout: int | None = None,
         enable_logging: bool = False,
         log_level: int | str | None = None,
     ):
@@ -528,13 +530,13 @@ class AsyncSideShiftClient(BaseClient):
             secret: SideShift account secret
             affiliate_id: Affiliate ID
             user_ip: End-user IP address
-            base_url: Base URL for API
-            timeout: Request timeout in seconds
+            base_url: Base URL for API (can also be set via SIDESHIFT_BASE_URL env var)
+            timeout: Request timeout in seconds (can also be set via SIDESHIFT_TIMEOUT env var)
             enable_logging: Whether to enable logging (default: False)
             log_level: Logging level if enable_logging is True (default: logging.INFO)
         """
         super().__init__(secret, affiliate_id, user_ip, base_url, enable_logging, log_level)
-        self.timeout = timeout
+        self.timeout = SDKConfig.get_timeout(timeout)
         self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -556,7 +558,7 @@ class AsyncSideShiftClient(BaseClient):
         headers: HeadersDict | None = None,
         require_auth: bool = False,
         require_user_ip: bool = False,
-        max_retries: int = 3,
+        max_retries: int | None = None,
     ) -> JsonDict:
         """Make HTTP request with retry logic.
 
@@ -568,11 +570,12 @@ class AsyncSideShiftClient(BaseClient):
             headers: Additional headers
             require_auth: Whether authentication is required
             require_user_ip: Whether user IP header is required
-            max_retries: Maximum number of retries for rate limits
+            max_retries: Maximum number of retries for rate limits (can also be set via SIDESHIFT_MAX_RETRIES env var)
 
         Returns:
             Response JSON data
         """
+        max_retries = SDKConfig.get_max_retries(max_retries)
         url = f"{self.base_url}{endpoint}"
         request_headers = self._get_headers(
             include_secret=require_auth, include_user_ip=require_user_ip
