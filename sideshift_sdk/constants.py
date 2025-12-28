@@ -1,7 +1,12 @@
 """Constants for SideShift SDK."""
 
 # API Configuration
-BASE_URL = "https://sideshift.ai/api/v2"
+API_BASE_DOMAIN = "https://sideshift.ai"
+DEFAULT_API_VERSION = "v2"
+BASE_URL = f"{API_BASE_DOMAIN}/api/{DEFAULT_API_VERSION}"
+
+# Supported API versions
+SUPPORTED_API_VERSIONS = ["v2"]
 
 # HTTP Headers
 HEADER_CONTENT_TYPE = "Content-Type"

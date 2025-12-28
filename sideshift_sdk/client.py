@@ -57,6 +57,7 @@ class BaseClient:
         affiliate_id: str | None = None,
         user_ip: str | None = None,
         base_url: str | None = None,
+        api_version: str | None = None,
         enable_logging: bool = False,
         log_level: int | str | None = None,
     ):
@@ -70,13 +71,22 @@ class BaseClient:
             user_ip: End-user IP address (x-user-ip header)
                      Can also be set via SIDESHIFT_USER_IP environment variable
             base_url: Base URL for API (defaults to production)
+                     If provided, takes precedence over api_version
+            api_version: API version to use (e.g., "v2")
+                        Can also be set via SIDESHIFT_API_VERSION environment variable
+                        Default: "v2"
+                        Only used if base_url is not provided
             enable_logging: Whether to enable logging (default: False)
             log_level: Logging level if enable_logging is True (default: logging.INFO)
+
+        Raises:
+            ValueError: If api_version is not supported
         """
         self.secret = secret or os.getenv("SIDESHIFT_SECRET")
         self.affiliate_id = affiliate_id or os.getenv("AFFILIATE_ID")
         self.user_ip = user_ip or os.getenv("SIDESHIFT_USER_IP")
-        self.base_url = SDKConfig.get_base_url(base_url)
+        self.api_version = SDKConfig.get_api_version(api_version)
+        self.base_url = SDKConfig.get_base_url(base_url, api_version=self.api_version)
         self._logger = get_logger()
         self._enable_logging = enable_logging
         
@@ -450,6 +460,7 @@ class SideShiftClient(BaseClient):
         affiliate_id: str | None = None,
         user_ip: str | None = None,
         base_url: str | None = None,
+        api_version: str | None = None,
         timeout: int | None = None,
         max_connections: int | None = None,
         max_keepalive_connections: int | None = None,
@@ -468,6 +479,11 @@ class SideShiftClient(BaseClient):
             affiliate_id: Affiliate ID
             user_ip: End-user IP address
             base_url: Base URL for API (can also be set via SIDESHIFT_BASE_URL env var)
+                     If provided, takes precedence over api_version
+            api_version: API version to use (e.g., "v2")
+                        Can also be set via SIDESHIFT_API_VERSION env var
+                        Default: "v2"
+                        Only used if base_url is not provided
             timeout: Request timeout in seconds (can also be set via SIDESHIFT_TIMEOUT env var)
             max_connections: Maximum number of connections in pool (can also be set via SIDESHIFT_MAX_CONNECTIONS env var)
             max_keepalive_connections: Maximum number of keepalive connections (can also be set via SIDESHIFT_MAX_KEEPALIVE_CONNECTIONS env var)
@@ -479,7 +495,7 @@ class SideShiftClient(BaseClient):
             enable_logging: Whether to enable logging (default: False)
             log_level: Logging level if enable_logging is True (default: logging.INFO)
         """
-        super().__init__(secret, affiliate_id, user_ip, base_url, enable_logging, log_level)
+        super().__init__(secret, affiliate_id, user_ip, base_url, api_version, enable_logging, log_level)
         self.timeout = SDKConfig.get_timeout(timeout)
         self.max_connections = SDKConfig.get_max_connections(max_connections)
         self.max_keepalive_connections = SDKConfig.get_max_keepalive_connections(max_keepalive_connections)
@@ -844,6 +860,7 @@ class AsyncSideShiftClient(BaseClient):
         affiliate_id: str | None = None,
         user_ip: str | None = None,
         base_url: str | None = None,
+        api_version: str | None = None,
         timeout: int | None = None,
         max_connections: int | None = None,
         max_keepalive_connections: int | None = None,
@@ -862,6 +879,11 @@ class AsyncSideShiftClient(BaseClient):
             affiliate_id: Affiliate ID
             user_ip: End-user IP address
             base_url: Base URL for API (can also be set via SIDESHIFT_BASE_URL env var)
+                     If provided, takes precedence over api_version
+            api_version: API version to use (e.g., "v2")
+                        Can also be set via SIDESHIFT_API_VERSION env var
+                        Default: "v2"
+                        Only used if base_url is not provided
             timeout: Request timeout in seconds (can also be set via SIDESHIFT_TIMEOUT env var)
             max_connections: Maximum number of connections in pool (can also be set via SIDESHIFT_MAX_CONNECTIONS env var)
             max_keepalive_connections: Maximum number of keepalive connections (can also be set via SIDESHIFT_MAX_KEEPALIVE_CONNECTIONS env var)
@@ -873,7 +895,7 @@ class AsyncSideShiftClient(BaseClient):
             enable_logging: Whether to enable logging (default: False)
             log_level: Logging level if enable_logging is True (default: logging.INFO)
         """
-        super().__init__(secret, affiliate_id, user_ip, base_url, enable_logging, log_level)
+        super().__init__(secret, affiliate_id, user_ip, base_url, api_version, enable_logging, log_level)
         self.timeout = SDKConfig.get_timeout(timeout)
         self.max_connections = SDKConfig.get_max_connections(max_connections)
         self.max_keepalive_connections = SDKConfig.get_max_keepalive_connections(max_keepalive_connections)

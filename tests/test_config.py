@@ -312,9 +312,94 @@ def test_client_uses_env_max_retries():
         assert client.max_retries == 7
 
 
+    @pytest.mark.asyncio
+    async def test_async_client_uses_config_max_retries():
+        """Test that async client uses configurable max retries."""
+        async with AsyncSideShiftClient(secret="test-secret", max_retries=5) as client:
+            assert client.max_retries == 5
+
+
+def test_get_api_version_default():
+    """Test that get_api_version returns default version."""
+    assert SDKConfig.get_api_version() == "v2"
+
+
+def test_get_api_version_from_provided():
+    """Test that get_api_version uses provided value."""
+    assert SDKConfig.get_api_version(provided="v2") == "v2"
+
+
+def test_get_api_version_from_env():
+    """Test that get_api_version uses environment variable."""
+    with patch.dict(os.environ, {"SIDESHIFT_API_VERSION": "v2"}):
+        assert SDKConfig.get_api_version() == "v2"
+
+
+def test_get_api_version_provided_overrides_env():
+    """Test that provided value overrides environment variable."""
+    with patch.dict(os.environ, {"SIDESHIFT_API_VERSION": "v2"}):
+        assert SDKConfig.get_api_version(provided="v2") == "v2"
+
+
+def test_get_api_version_unsupported():
+    """Test that get_api_version raises ValueError for unsupported version."""
+    with pytest.raises(ValueError, match="Unsupported API version"):
+        SDKConfig.get_api_version(provided="v1")
+
+
+def test_get_api_version_unsupported_from_env():
+    """Test that get_api_version raises ValueError for unsupported version from env."""
+    with patch.dict(os.environ, {"SIDESHIFT_API_VERSION": "v1"}):
+        with pytest.raises(ValueError, match="Unsupported API version"):
+            SDKConfig.get_api_version()
+
+
+def test_get_base_url_from_api_version():
+    """Test that get_base_url constructs URL from API version."""
+    url = SDKConfig.get_base_url(api_version="v2")
+    assert url == "https://sideshift.ai/api/v2"
+
+
+def test_get_base_url_provided_overrides_api_version():
+    """Test that provided base_url overrides api_version."""
+    custom_url = "https://custom.example.com/api"
+    url = SDKConfig.get_base_url(provided=custom_url, api_version="v2")
+    assert url == custom_url
+
+
+def test_client_uses_api_version():
+    """Test that client uses API version to construct base URL."""
+    client = SideShiftClient(secret="test-secret", api_version="v2")
+    assert client.api_version == "v2"
+    assert client.base_url == "https://sideshift.ai/api/v2"
+
+
+def test_client_uses_env_api_version():
+    """Test that client uses API version from environment variable."""
+    with patch.dict(os.environ, {"SIDESHIFT_API_VERSION": "v2"}):
+        client = SideShiftClient(secret="test-secret")
+        assert client.api_version == "v2"
+        assert client.base_url == "https://sideshift.ai/api/v2"
+
+
+def test_client_base_url_overrides_api_version():
+    """Test that base_url parameter overrides api_version."""
+    custom_url = "https://custom.example.com/api"
+    client = SideShiftClient(secret="test-secret", base_url=custom_url, api_version="v2")
+    assert client.base_url == custom_url
+    assert client.api_version == "v2"  # Still set, but base_url takes precedence
+
+
+def test_client_unsupported_api_version():
+    """Test that client raises ValueError for unsupported API version."""
+    with pytest.raises(ValueError, match="Unsupported API version"):
+        SideShiftClient(secret="test-secret", api_version="v1")
+
+
 @pytest.mark.asyncio
-async def test_async_client_uses_config_max_retries():
-    """Test that async client uses configurable max retries."""
-    async with AsyncSideShiftClient(secret="test-secret", max_retries=5) as client:
-        assert client.max_retries == 5
+async def test_async_client_uses_api_version():
+    """Test that async client uses API version to construct base URL."""
+    async with AsyncSideShiftClient(secret="test-secret", api_version="v2") as client:
+        assert client.api_version == "v2"
+        assert client.base_url == "https://sideshift.ai/api/v2"
 

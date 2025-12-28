@@ -2,7 +2,7 @@
 
 import os
 
-from sideshift_sdk.constants import BASE_URL
+from sideshift_sdk.constants import API_BASE_DOMAIN, BASE_URL, DEFAULT_API_VERSION, SUPPORTED_API_VERSIONS
 
 
 class SDKConfig:
@@ -16,6 +16,7 @@ class SDKConfig:
     DEFAULT_TIMEOUT = 30
     DEFAULT_MAX_RETRIES = 3
     DEFAULT_BASE_URL = BASE_URL
+    DEFAULT_API_VERSION = DEFAULT_API_VERSION
     DEFAULT_MAX_CONNECTIONS = 10
     DEFAULT_MAX_KEEPALIVE_CONNECTIONS = 5
     DEFAULT_VERIFY_SSL = True
@@ -64,11 +65,42 @@ class SDKConfig:
         return SDKConfig.DEFAULT_MAX_RETRIES
 
     @staticmethod
-    def get_base_url(provided: str | None = None) -> str:
-        """Get base URL from provided value or environment variable.
+    def get_api_version(provided: str | None = None) -> str:
+        """Get API version from provided value or environment variable.
+
+        Args:
+            provided: API version provided directly (takes precedence)
+
+        Returns:
+            API version string (e.g., "v2")
+
+        Raises:
+            ValueError: If the provided version is not supported
+        """
+        if provided is not None:
+            if provided not in SUPPORTED_API_VERSIONS:
+                raise ValueError(
+                    f"Unsupported API version: {provided}. "
+                    f"Supported versions: {', '.join(SUPPORTED_API_VERSIONS)}"
+                )
+            return provided
+        env_version = os.getenv("SIDESHIFT_API_VERSION")
+        if env_version:
+            if env_version not in SUPPORTED_API_VERSIONS:
+                raise ValueError(
+                    f"Unsupported API version from environment: {env_version}. "
+                    f"Supported versions: {', '.join(SUPPORTED_API_VERSIONS)}"
+                )
+            return env_version
+        return SDKConfig.DEFAULT_API_VERSION
+
+    @staticmethod
+    def get_base_url(provided: str | None = None, api_version: str | None = None) -> str:
+        """Get base URL from provided value, API version, or environment variable.
 
         Args:
             provided: Base URL provided directly (takes precedence)
+            api_version: API version to use when constructing base URL
 
         Returns:
             Base URL for API
@@ -78,6 +110,10 @@ class SDKConfig:
         env_url = os.getenv("SIDESHIFT_BASE_URL")
         if env_url:
             return env_url
+        # Construct base URL from domain and API version
+        if api_version is not None:
+            validated_version = SDKConfig.get_api_version(api_version)
+            return f"{API_BASE_DOMAIN}/api/{validated_version}"
         return SDKConfig.DEFAULT_BASE_URL
 
     @staticmethod
