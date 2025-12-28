@@ -3,6 +3,7 @@
 import asyncio
 import inspect
 import json
+import logging
 import os
 import time
 import uuid
@@ -49,7 +50,7 @@ AsyncErrorHook = Callable[[Exception, str, str], Awaitable[None]]
 class BaseClient:
     """Base client with common functionality."""
 
-    BASE_URL = BASE_URL  # Use constant from constants module
+    BASE_URL: str = BASE_URL  # Use constant from constants module
 
     def __init__(
         self,
@@ -82,13 +83,13 @@ class BaseClient:
         Raises:
             ValueError: If api_version is not supported
         """
-        self.secret = secret or os.getenv("SIDESHIFT_SECRET")
-        self.affiliate_id = affiliate_id or os.getenv("AFFILIATE_ID")
-        self.user_ip = user_ip or os.getenv("SIDESHIFT_USER_IP")
-        self.api_version = SDKConfig.get_api_version(api_version)
-        self.base_url = SDKConfig.get_base_url(base_url, api_version=self.api_version)
-        self._logger = get_logger()
-        self._enable_logging = enable_logging
+        self.secret: str | None = secret or os.getenv("SIDESHIFT_SECRET")
+        self.affiliate_id: str | None = affiliate_id or os.getenv("AFFILIATE_ID")
+        self.user_ip: str | None = user_ip or os.getenv("SIDESHIFT_USER_IP")
+        self.api_version: str = SDKConfig.get_api_version(api_version)
+        self.base_url: str = SDKConfig.get_base_url(base_url, api_version=self.api_version)
+        self._logger: logging.Logger = get_logger()
+        self._enable_logging: bool = enable_logging
         
         if enable_logging and log_level is not None:
             import logging
@@ -496,17 +497,17 @@ class SideShiftClient(BaseClient):
             log_level: Logging level if enable_logging is True (default: logging.INFO)
         """
         super().__init__(secret, affiliate_id, user_ip, base_url, api_version, enable_logging, log_level)
-        self.timeout = SDKConfig.get_timeout(timeout)
-        self.max_connections = SDKConfig.get_max_connections(max_connections)
-        self.max_keepalive_connections = SDKConfig.get_max_keepalive_connections(max_keepalive_connections)
-        self.max_request_size = SDKConfig.get_max_request_size(max_request_size)
-        self.max_response_size = SDKConfig.get_max_response_size(max_response_size)
-        self.verify_ssl = SDKConfig.get_verify_ssl(verify_ssl)
-        self.proxy = SDKConfig.get_proxy(proxy)
-        self.max_retries = SDKConfig.get_max_retries(max_retries)
+        self.timeout: int = SDKConfig.get_timeout(timeout)
+        self.max_connections: int = SDKConfig.get_max_connections(max_connections)
+        self.max_keepalive_connections: int = SDKConfig.get_max_keepalive_connections(max_keepalive_connections)
+        self.max_request_size: int = SDKConfig.get_max_request_size(max_request_size)
+        self.max_response_size: int = SDKConfig.get_max_response_size(max_response_size)
+        self.verify_ssl: bool = SDKConfig.get_verify_ssl(verify_ssl)
+        self.proxy: str | dict[str, str] | None = SDKConfig.get_proxy(proxy)
+        self.max_retries: int = SDKConfig.get_max_retries(max_retries)
         
         # Configure connection pooling
-        self._session = requests.Session()
+        self._session: requests.Session = requests.Session()
         adapter = requests.adapters.HTTPAdapter(
             pool_connections=self.max_connections,
             pool_maxsize=self.max_connections,
@@ -896,14 +897,14 @@ class AsyncSideShiftClient(BaseClient):
             log_level: Logging level if enable_logging is True (default: logging.INFO)
         """
         super().__init__(secret, affiliate_id, user_ip, base_url, api_version, enable_logging, log_level)
-        self.timeout = SDKConfig.get_timeout(timeout)
-        self.max_connections = SDKConfig.get_max_connections(max_connections)
-        self.max_keepalive_connections = SDKConfig.get_max_keepalive_connections(max_keepalive_connections)
-        self.verify_ssl = SDKConfig.get_verify_ssl(verify_ssl)
-        self.proxy = SDKConfig.get_proxy(proxy)
-        self.max_retries = SDKConfig.get_max_retries(max_retries)
-        self.max_request_size = SDKConfig.get_max_request_size(max_request_size)
-        self.max_response_size = SDKConfig.get_max_response_size(max_response_size)
+        self.timeout: int = SDKConfig.get_timeout(timeout)
+        self.max_connections: int = SDKConfig.get_max_connections(max_connections)
+        self.max_keepalive_connections: int = SDKConfig.get_max_keepalive_connections(max_keepalive_connections)
+        self.verify_ssl: bool = SDKConfig.get_verify_ssl(verify_ssl)
+        self.proxy: str | dict[str, str] | None = SDKConfig.get_proxy(proxy)
+        self.max_retries: int = SDKConfig.get_max_retries(max_retries)
+        self.max_request_size: int = SDKConfig.get_max_request_size(max_request_size)
+        self.max_response_size: int = SDKConfig.get_max_response_size(max_response_size)
         self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
