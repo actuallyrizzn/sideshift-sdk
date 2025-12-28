@@ -33,12 +33,6 @@ class TokenNetworkDetails(BaseModel):
     decimals: int = Field(..., gt=0)
 
 
-class NetworkTokenDetails(BaseModel):
-    """Network token details."""
-
-    network: TokenNetworkDetails
-
-
 class Coin(BaseModel):
     """Coin information from GET /coins."""
 
@@ -48,7 +42,7 @@ class Coin(BaseModel):
     has_memo: bool | None = Field(None, alias="hasMemo")  # deprecated
     fixed_only: list[str] | bool = Field(..., alias="fixedOnly")
     variable_only: list[str] | bool = Field(..., alias="variableOnly")
-    token_details: dict[str, NetworkTokenDetails] | None = Field(None, alias="tokenDetails")
+    token_details: dict[str, TokenNetworkDetails] | None = Field(None, alias="tokenDetails")
     networks_with_memo: list[str] = Field(..., alias="networksWithMemo")
     deposit_offline: list[str] | bool | None = Field(None, alias="depositOffline")
     settle_offline: list[str] | bool | None = Field(None, alias="settleOffline")
@@ -289,7 +283,7 @@ class XAIStats(BaseModel):
     """XAI statistics from GET /xai/stats."""
 
     total_supply: int = Field(..., alias="totalSupply", ge=0)
-    circulating_supply: int = Field(..., alias="circulatingSupply", ge=0)
+    circulating_supply: float = Field(..., alias="circulatingSupply", ge=0)  # API returns float
     number_of_stakers: int = Field(..., alias="numberOfStakers", ge=0)
     latest_annual_percentage_yield: str = Field(..., alias="latestAnnualPercentageYield", min_length=1)
     latest_distributed_xai: str = Field(..., alias="latestDistributedXai", min_length=1)
