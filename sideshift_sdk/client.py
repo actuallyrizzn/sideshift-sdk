@@ -275,7 +275,17 @@ class BaseClient:
         
         # Include request_id in error response_data if available
         def add_request_id_to_error_data(error_data: dict | None) -> dict:
-            """Add request_id to error_data if available."""
+            """Add request_id to error_data if available.
+
+            This helper function ensures that request_id is included in error response
+            data for correlation tracking, creating a new dict if error_data is None.
+
+            Args:
+                error_data: Existing error data dict or None
+
+            Returns:
+                Error data dict with request_id added if available
+            """
             if error_data is None:
                 error_data = {}
             if request_id:
@@ -779,15 +789,49 @@ class SideShiftClient(BaseClient):
         return response.content
 
     def close(self) -> None:
-        """Close the session."""
+        """Close the HTTP session and release resources.
+
+        This method closes the underlying `requests.Session` object, which releases
+        all connection pools and network resources. After calling this method,
+        the client should not be used for making requests.
+
+        Note:
+            It's safe to call this method multiple times. If the session is already
+            closed, subsequent calls will have no effect.
+
+        Example:
+            >>> client = SideShiftClient(secret="...")
+            >>> # ... use client ...
+            >>> client.close()  # Clean up resources
+        """
         self._session.close()
 
     def __enter__(self) -> "SideShiftClient":
-        """Context manager entry."""
+        """Context manager entry.
+
+        Allows the client to be used as a context manager with the `with` statement.
+        Automatically closes the session when exiting the context.
+
+        Returns:
+            The client instance itself
+
+        Example:
+            >>> with SideShiftClient(secret="...") as client:
+            ...     coins = client.get("/coins")
+        """
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Context manager exit."""
+        """Context manager exit.
+
+        Automatically closes the HTTP session when exiting the context.
+        This ensures proper cleanup of network resources.
+
+        Args:
+            exc_type: Exception type if an exception occurred
+            exc_val: Exception value if an exception occurred
+            exc_tb: Exception traceback if an exception occurred
+        """
         self.close()
 
 
@@ -843,8 +887,16 @@ class AsyncSideShiftClient(BaseClient):
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create async HTTP client.
 
+        This method implements lazy initialization of the `httpx.AsyncClient`.
+        The client is created on first use and reused for subsequent requests,
+        enabling connection pooling and efficient resource usage.
+
         Returns:
-            Async HTTP client
+            The async HTTP client instance, creating it if it doesn't exist
+
+        Note:
+            The client is configured with connection pooling limits, SSL verification,
+            and timeout settings based on the client's configuration.
         """
         if self._client is None:
             limits = httpx.Limits(
@@ -1157,15 +1209,49 @@ class AsyncSideShiftClient(BaseClient):
         )
 
     async def close(self) -> None:
-        """Close the async client."""
+        """Close the async HTTP client and release resources.
+
+        This method closes the underlying `httpx.AsyncClient` object, which releases
+        all connection pools and network resources. After calling this method,
+        the client should not be used for making requests.
+
+        Note:
+            It's safe to call this method multiple times. If the client is already
+            closed, subsequent calls will have no effect.
+
+        Example:
+            >>> client = AsyncSideShiftClient(secret="...")
+            >>> # ... use client ...
+            >>> await client.close()  # Clean up resources
+        """
         if self._client:
             await self._client.aclose()
             self._client = None
 
     async def __aenter__(self) -> "AsyncSideShiftClient":
-        """Async context manager entry."""
+        """Async context manager entry.
+
+        Allows the async client to be used as an async context manager with the `async with` statement.
+        Automatically closes the async client session when exiting the context.
+
+        Returns:
+            The async client instance itself
+
+        Example:
+            >>> async with AsyncSideShiftClient(secret="...") as client:
+            ...     coins = await client.get("/coins")
+        """
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Async context manager exit."""
+        """Async context manager exit.
+
+        Automatically closes the async HTTP client when exiting the context.
+        This ensures proper cleanup of network resources and connection pools.
+
+        Args:
+            exc_type: Exception type if an exception occurred
+            exc_val: Exception value if an exception occurred
+            exc_tb: Exception traceback if an exception occurred
+        """
         await self.close()
