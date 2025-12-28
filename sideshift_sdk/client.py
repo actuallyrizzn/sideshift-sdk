@@ -113,13 +113,14 @@ class BaseClient:
         )
 
     def _get_headers(
-        self, include_secret: bool = False, include_user_ip: bool = False
+        self, include_secret: bool = False, include_user_ip: bool = False, request_id: str | None = None
     ) -> HeadersDict:
         """Get request headers.
 
         Args:
             include_secret: Whether to include x-sideshift-secret header
             include_user_ip: Whether to include x-user-ip header
+            request_id: Optional request ID to include in X-Request-ID header
 
         Returns:
             Headers dictionary
@@ -138,8 +139,60 @@ class BaseClient:
 
         if include_user_ip and self.user_ip:
             headers[HEADER_USER_IP] = self.user_ip
+        
+        # Add X-Request-ID for correlation tracking
+        if request_id:
+            headers[HEADER_REQUEST_ID] = request_id
+        elif HEADER_REQUEST_ID not in headers:
+            headers[HEADER_REQUEST_ID] = str(uuid.uuid4())
 
         return headers
+
+    def _merge_headers(
+        self, sdk_headers: HeadersDict, user_headers: HeadersDict | None
+    ) -> HeadersDict:
+        """Merge user-provided headers with SDK-managed headers.
+
+        This method protects SDK-managed headers from being overridden by user headers.
+        SDK headers take precedence for: Content-Type, Accept, User-Agent, X-Request-ID.
+
+        Args:
+            sdk_headers: Headers managed by the SDK
+            user_headers: Optional user-provided headers
+
+        Returns:
+            Merged headers dictionary with SDK headers taking precedence
+        """
+        if not user_headers:
+            return sdk_headers.copy()
+
+        # Headers that should be protected from user override
+        protected_headers = {
+            HEADER_CONTENT_TYPE.lower(),
+            HEADER_ACCEPT.lower(),
+            HEADER_USER_AGENT.lower(),
+            HEADER_REQUEST_ID.lower(),
+        }
+
+        # Start with SDK headers (these take precedence)
+        merged = sdk_headers.copy()
+
+        # Add user headers, but skip protected ones
+        for key, value in user_headers.items():
+            key_lower = key.lower()
+            if key_lower in protected_headers:
+                # Check if user is trying to override a protected header
+                if key_lower in {h.lower() for h in merged.keys()}:
+                    if self._enable_logging:
+                        self._logger.warning(
+                            f"User-provided header '{key}' is protected and will be ignored. "
+                            f"SDK-managed value will be used instead."
+                        )
+                # Don't add protected headers from user
+                continue
+            merged[key] = value
+
+        return merged
 
     def add_request_hook(self, hook: RequestHook | AsyncRequestHook) -> None:
         """Add a request hook that will be called before each request.
@@ -466,9 +519,6 @@ class SideShiftClient(BaseClient):
         # Use client-level max_retries if not provided, otherwise use provided value
         retry_count = self.max_retries if max_retries is None else max_retries
         url = f"{self.base_url}{endpoint}"
-        request_headers = self._get_headers(
-            include_secret=require_auth, include_user_ip=require_user_ip
-        )
         
         # Generate request ID if not provided by user
         request_id = None
@@ -476,10 +526,14 @@ class SideShiftClient(BaseClient):
             request_id = headers[HEADER_REQUEST_ID]
         else:
             request_id = str(uuid.uuid4())
-            request_headers[HEADER_REQUEST_ID] = request_id
         
-        if headers:
-            request_headers.update(headers)
+        # Get SDK headers with request ID
+        sdk_headers = self._get_headers(
+            include_secret=require_auth, include_user_ip=require_user_ip, request_id=request_id
+        )
+        
+        # Merge user headers (protected headers will be ignored)
+        request_headers = self._merge_headers(sdk_headers, headers)
 
         # Validate request body size if json_data is provided
         if json_data is not None and self.max_request_size is not None:
@@ -702,11 +756,10 @@ class SideShiftClient(BaseClient):
             Response binary data
         """
         url = f"{self.base_url}{endpoint}"
-        request_headers = self._get_headers(
+        sdk_headers = self._get_headers(
             include_secret=require_auth, include_user_ip=require_user_ip
         )
-        if headers:
-            request_headers.update(headers)
+        request_headers = self._merge_headers(sdk_headers, headers)
 
         response = self._session.get(
             url,
@@ -834,9 +887,6 @@ class AsyncSideShiftClient(BaseClient):
         # Use client-level max_retries if not provided, otherwise use provided value
         retry_count = self.max_retries if max_retries is None else max_retries
         url = f"{self.base_url}{endpoint}"
-        request_headers = self._get_headers(
-            include_secret=require_auth, include_user_ip=require_user_ip
-        )
         
         # Generate request ID if not provided by user
         request_id = None
@@ -844,10 +894,14 @@ class AsyncSideShiftClient(BaseClient):
             request_id = headers[HEADER_REQUEST_ID]
         else:
             request_id = str(uuid.uuid4())
-            request_headers[HEADER_REQUEST_ID] = request_id
         
-        if headers:
-            request_headers.update(headers)
+        # Get SDK headers with request ID
+        sdk_headers = self._get_headers(
+            include_secret=require_auth, include_user_ip=require_user_ip, request_id=request_id
+        )
+        
+        # Merge user headers (protected headers will be ignored)
+        request_headers = self._merge_headers(sdk_headers, headers)
 
         # Validate request body size if json_data is provided
         if json_data is not None and self.max_request_size is not None:
@@ -1050,11 +1104,10 @@ class AsyncSideShiftClient(BaseClient):
             Response binary data
         """
         url = f"{self.base_url}{endpoint}"
-        request_headers = self._get_headers(
+        sdk_headers = self._get_headers(
             include_secret=require_auth, include_user_ip=require_user_ip
         )
-        if headers:
-            request_headers.update(headers)
+        request_headers = self._merge_headers(sdk_headers, headers)
 
         client = await self._get_client()
         response = await client.get(
