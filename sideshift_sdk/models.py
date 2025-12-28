@@ -30,7 +30,7 @@ class Coin(BaseModel):
     networks: list[str]
     coin: str = Field(..., min_length=1)
     name: str = Field(..., min_length=1)
-    has_memo: bool = Field(..., alias="hasMemo")  # deprecated
+    has_memo: bool | None = Field(None, alias="hasMemo")  # deprecated
     fixed_only: list[str] | bool = Field(..., alias="fixedOnly")
     variable_only: list[str] | bool = Field(..., alias="variableOnly")
     token_details: dict[str, NetworkTokenDetails] | None = Field(None, alias="tokenDetails")

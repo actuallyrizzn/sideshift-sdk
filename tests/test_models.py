@@ -43,6 +43,38 @@ def test_coin_model():
     assert len(coin.networks) == 2
 
 
+def test_coin_model_deprecated_has_memo_optional():
+    """Test that deprecated has_memo field is optional."""
+    # Test with hasMemo provided
+    coin_data_with = {
+        "networks": ["bitcoin", "mainnet"],
+        "coin": "btc",
+        "name": "Bitcoin",
+        "hasMemo": True,
+        "fixedOnly": False,
+        "variableOnly": False,
+        "networksWithMemo": [],
+        "depositOffline": False,
+        "settleOffline": False,
+    }
+    coin_with = Coin(**coin_data_with)
+    assert coin_with.has_memo is True
+
+    # Test without hasMemo (should be None)
+    coin_data_without = {
+        "networks": ["bitcoin", "mainnet"],
+        "coin": "btc",
+        "name": "Bitcoin",
+        "fixedOnly": False,
+        "variableOnly": False,
+        "networksWithMemo": [],
+        "depositOffline": False,
+        "settleOffline": False,
+    }
+    coin_without = Coin(**coin_data_without)
+    assert coin_without.has_memo is None
+
+
 def test_pair_info_model():
     """Test PairInfo model validation."""
     pair_data = {
