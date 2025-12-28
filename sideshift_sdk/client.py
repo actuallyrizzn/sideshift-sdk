@@ -527,6 +527,7 @@ class SideShiftClient(BaseClient):
         require_auth: bool = False,
         require_user_ip: bool = False,
         max_retries: int | None = None,
+        timeout: int | None = None,
     ) -> JsonDict:
         """Make HTTP request with retry logic.
 
@@ -539,12 +540,15 @@ class SideShiftClient(BaseClient):
             require_auth: Whether authentication is required
             require_user_ip: Whether user IP header is required
             max_retries: Maximum number of retries for rate limits (if None, uses client-level max_retries)
+            timeout: Request timeout in seconds (if None, uses client-level timeout)
 
         Returns:
             Response JSON data
         """
         # Use client-level max_retries if not provided, otherwise use provided value
         retry_count = self.max_retries if max_retries is None else max_retries
+        # Use client-level timeout if not provided, otherwise use provided value
+        request_timeout = self.timeout if timeout is None else timeout
         url = f"{self.base_url}{endpoint}"
         
         # Generate request ID if not provided by user
@@ -610,7 +614,7 @@ class SideShiftClient(BaseClient):
                     params=params,
                     json=json_data,
                     headers=request_headers,
-                    timeout=self.timeout,
+                    timeout=request_timeout,
                     verify=self.verify_ssl,
                     proxies=self.proxy if self.proxy else None,
                 )
@@ -713,6 +717,7 @@ class SideShiftClient(BaseClient):
         headers: HeadersDict | None = None,
         require_auth: bool = False,
         require_user_ip: bool = False,
+        timeout: int | None = None,
     ) -> JsonDict:
         """Make GET request.
 
@@ -722,6 +727,7 @@ class SideShiftClient(BaseClient):
             headers: Additional headers
             require_auth: Whether authentication is required
             require_user_ip: Whether user IP header is required
+            timeout: Request timeout in seconds (if None, uses client-level timeout)
 
         Returns:
             Response JSON data
@@ -733,6 +739,7 @@ class SideShiftClient(BaseClient):
             headers=headers,
             require_auth=require_auth,
             require_user_ip=require_user_ip,
+            timeout=timeout,
         )
 
     def post(
@@ -742,6 +749,7 @@ class SideShiftClient(BaseClient):
         headers: HeadersDict | None = None,
         require_auth: bool = False,
         require_user_ip: bool = False,
+        timeout: int | None = None,
     ) -> JsonDict:
         """Make POST request.
 
@@ -751,6 +759,7 @@ class SideShiftClient(BaseClient):
             headers: Additional headers
             require_auth: Whether authentication is required
             require_user_ip: Whether user IP header is required
+            timeout: Request timeout in seconds (if None, uses client-level timeout)
 
         Returns:
             Response JSON data
@@ -762,6 +771,7 @@ class SideShiftClient(BaseClient):
             headers=headers,
             require_auth=require_auth,
             require_user_ip=require_user_ip,
+            timeout=timeout,
         )
 
     def get_binary(
@@ -770,6 +780,7 @@ class SideShiftClient(BaseClient):
         headers: HeadersDict | None = None,
         require_auth: bool = False,
         require_user_ip: bool = False,
+        timeout: int | None = None,
     ) -> bytes:
         """Make GET request and return binary response.
 
@@ -778,6 +789,7 @@ class SideShiftClient(BaseClient):
             headers: Additional headers
             require_auth: Whether authentication is required
             require_user_ip: Whether user IP header is required
+            timeout: Request timeout in seconds (if None, uses client-level timeout)
 
         Returns:
             Response binary data
@@ -787,11 +799,13 @@ class SideShiftClient(BaseClient):
             include_secret=require_auth, include_user_ip=require_user_ip
         )
         request_headers = self._merge_headers(sdk_headers, headers)
+        # Use client-level timeout if not provided, otherwise use provided value
+        request_timeout = self.timeout if timeout is None else timeout
 
         response = self._session.get(
             url,
             headers=request_headers,
-            timeout=self.timeout,
+            timeout=request_timeout,
         )
 
         if response.status_code != 200:
@@ -965,6 +979,7 @@ class AsyncSideShiftClient(BaseClient):
         require_auth: bool = False,
         require_user_ip: bool = False,
         max_retries: int | None = None,
+        timeout: int | None = None,
     ) -> JsonDict:
         """Make HTTP request with retry logic.
 
@@ -977,12 +992,15 @@ class AsyncSideShiftClient(BaseClient):
             require_auth: Whether authentication is required
             require_user_ip: Whether user IP header is required
             max_retries: Maximum number of retries for rate limits (if None, uses client-level max_retries)
+            timeout: Request timeout in seconds (if None, uses client-level timeout)
 
         Returns:
             Response JSON data
         """
         # Use client-level max_retries if not provided, otherwise use provided value
         retry_count = self.max_retries if max_retries is None else max_retries
+        # Use client-level timeout if not provided, otherwise use provided value
+        request_timeout = self.timeout if timeout is None else timeout
         url = f"{self.base_url}{endpoint}"
         
         # Generate request ID if not provided by user
@@ -1053,7 +1071,7 @@ class AsyncSideShiftClient(BaseClient):
                     params=params,
                     json=json_data,
                     headers=request_headers,
-                    timeout=self.timeout,
+                    timeout=request_timeout,
                 )
 
                 # Extract request ID from response headers if present (API may echo it back)
@@ -1160,6 +1178,7 @@ class AsyncSideShiftClient(BaseClient):
         headers: HeadersDict | None = None,
         require_auth: bool = False,
         require_user_ip: bool = False,
+        timeout: int | None = None,
     ) -> JsonDict:
         """Make GET request.
 
@@ -1169,6 +1188,7 @@ class AsyncSideShiftClient(BaseClient):
             headers: Additional headers
             require_auth: Whether authentication is required
             require_user_ip: Whether user IP header is required
+            timeout: Request timeout in seconds (if None, uses client-level timeout)
 
         Returns:
             Response JSON data
@@ -1180,6 +1200,7 @@ class AsyncSideShiftClient(BaseClient):
             headers=headers,
             require_auth=require_auth,
             require_user_ip=require_user_ip,
+            timeout=timeout,
         )
 
     async def get_binary(
@@ -1188,6 +1209,7 @@ class AsyncSideShiftClient(BaseClient):
         headers: HeadersDict | None = None,
         require_auth: bool = False,
         require_user_ip: bool = False,
+        timeout: int | None = None,
     ) -> bytes:
         """Make GET request and return binary response.
 
@@ -1196,6 +1218,7 @@ class AsyncSideShiftClient(BaseClient):
             headers: Additional headers
             require_auth: Whether authentication is required
             require_user_ip: Whether user IP header is required
+            timeout: Request timeout in seconds (if None, uses client-level timeout)
 
         Returns:
             Response binary data
@@ -1205,12 +1228,14 @@ class AsyncSideShiftClient(BaseClient):
             include_secret=require_auth, include_user_ip=require_user_ip
         )
         request_headers = self._merge_headers(sdk_headers, headers)
+        # Use client-level timeout if not provided, otherwise use provided value
+        request_timeout = self.timeout if timeout is None else timeout
 
         client = await self._get_client()
         response = await client.get(
             url,
             headers=request_headers,
-            timeout=self.timeout,
+            timeout=request_timeout,
         )
 
         if response.status_code != 200:
@@ -1231,6 +1256,7 @@ class AsyncSideShiftClient(BaseClient):
         headers: HeadersDict | None = None,
         require_auth: bool = False,
         require_user_ip: bool = False,
+        timeout: int | None = None,
     ) -> JsonDict:
         """Make POST request.
 
@@ -1240,6 +1266,7 @@ class AsyncSideShiftClient(BaseClient):
             headers: Additional headers
             require_auth: Whether authentication is required
             require_user_ip: Whether user IP header is required
+            timeout: Request timeout in seconds (if None, uses client-level timeout)
 
         Returns:
             Response JSON data
@@ -1251,6 +1278,7 @@ class AsyncSideShiftClient(BaseClient):
             headers=headers,
             require_auth=require_auth,
             require_user_ip=require_user_ip,
+            timeout=timeout,
         )
 
     async def close(self) -> None:
