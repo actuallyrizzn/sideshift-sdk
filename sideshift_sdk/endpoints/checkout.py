@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from sideshift_sdk.constants import HEADER_USER_IP
 from sideshift_sdk.models import Checkout, CheckoutRequest
-from sideshift_sdk.utils import normalize_affiliate_id
+from sideshift_sdk.utils import normalize_affiliate_id, validate_response_data
 
 if TYPE_CHECKING:
     from sideshift_sdk.client import AsyncSideShiftClient, SideShiftClient

@@ -3,7 +3,11 @@
 from typing import TYPE_CHECKING
 
 from sideshift_sdk.models import PairInfo
-from sideshift_sdk.utils import normalize_affiliate_id, validate_non_empty_string
+from sideshift_sdk.utils import (
+    normalize_affiliate_id,
+    validate_non_empty_string,
+    validate_response_data,
+)
 
 if TYPE_CHECKING:
     from sideshift_sdk.client import AsyncSideShiftClient, SideShiftClient

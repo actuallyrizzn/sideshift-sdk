@@ -12,6 +12,7 @@ from sideshift_sdk.utils import (
     normalize_affiliate_id,
     validate_non_empty_string,
     validate_positive_amount,
+    validate_response_data,
 )
 
 
@@ -123,3 +124,30 @@ def test_normalize_affiliate_id():
 
     # None should return None
     assert normalize_affiliate_id(None) is None
+
+
+def test_validate_response_data():
+    """Test validate_response_data function."""
+    # Valid dict
+    result = validate_response_data({"key": "value"}, dict)
+    assert result == {"key": "value"}
+
+    # Valid list of dicts
+    result = validate_response_data([{"a": 1}, {"b": 2}], list)
+    assert result == [{"a": 1}, {"b": 2}]
+
+    # Invalid: expected dict but got list
+    with pytest.raises(TypeError, match="Expected dict response"):
+        validate_response_data([1, 2, 3], dict)
+
+    # Invalid: expected list but got dict
+    with pytest.raises(TypeError, match="Expected list response"):
+        validate_response_data({"key": "value"}, list)
+
+    # Invalid: list contains non-dict items
+    with pytest.raises(ValueError, match="Expected list of dicts"):
+        validate_response_data([1, 2, 3], list)
+
+    # Invalid: list contains mixed types
+    with pytest.raises(ValueError, match="Expected list of dicts"):
+        validate_response_data([{"a": 1}, "string", {"b": 2}], list)

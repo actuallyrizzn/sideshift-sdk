@@ -11,7 +11,11 @@ from sideshift_sdk.models import (
     Shift,
     VariableShiftRequest,
 )
-from sideshift_sdk.utils import normalize_affiliate_id, validate_non_empty_string
+from sideshift_sdk.utils import (
+    normalize_affiliate_id,
+    validate_non_empty_string,
+    validate_response_data,
+)
 
 if TYPE_CHECKING:
     from sideshift_sdk.client import AsyncSideShiftClient, SideShiftClient
@@ -33,6 +37,7 @@ def get_shift(client: "SideShiftClient", shift_id: str) -> Shift:
         >>> print(f"Status: {shift.status}, Deposit: {shift.deposit_address}")
     """
     response = client.get(f"/shifts/{shift_id}", require_auth=False)
+    validate_response_data(response, dict)
     return Shift(**response)
 
 

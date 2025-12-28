@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from sideshift_sdk.constants import HEADER_ACCEPT, IMAGE_FORMAT_PNG, IMAGE_FORMAT_SVG
 from sideshift_sdk.models import Coin
-from sideshift_sdk.utils import validate_non_empty_string
+from sideshift_sdk.utils import validate_non_empty_string, validate_response_data
 
 if TYPE_CHECKING:
     from sideshift_sdk.client import AsyncSideShiftClient, SideShiftClient
@@ -27,6 +27,7 @@ def get_coins(client: "SideShiftClient") -> list[Coin]:
         ...     print(f"{coin.coin} on {coin.networks}")
     """
     response = client.get("/coins", require_auth=False)
+    validate_response_data(response, list)
     return [Coin(**coin_data) for coin_data in response]
 
 

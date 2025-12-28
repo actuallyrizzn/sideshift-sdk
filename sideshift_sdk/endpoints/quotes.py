@@ -8,6 +8,7 @@ from sideshift_sdk.utils import (
     normalize_affiliate_id,
     validate_non_empty_string,
     validate_positive_amount,
+    validate_response_data,
 )
 
 if TYPE_CHECKING:
@@ -83,6 +84,7 @@ def request_quote(
         require_auth=True,
         require_user_ip=bool(user_ip or client.user_ip),
     )
+    validate_response_data(response, dict)
     return Quote(**response)
 
 

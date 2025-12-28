@@ -1,6 +1,7 @@
 """Utility functions for SideShift SDK."""
 
 import time
+from typing import Any
 
 
 def validate_non_empty_string(value: str | None, param_name: str) -> None:
@@ -45,6 +46,42 @@ def validate_positive_amount(amount: str | None, param_name: str) -> None:
         if "could not convert" in str(e).lower():
             raise ValueError(f"{param_name} must be a valid number, got {amount}") from e
         raise
+
+
+def validate_response_data(response_data: Any, expected_type: type = dict) -> dict | list[dict]:
+    """Validate that response data matches expected type.
+
+    Args:
+        response_data: Response data from API
+        expected_type: Expected type (dict or list)
+
+    Returns:
+        Validated response data
+
+    Raises:
+        TypeError: If response data doesn't match expected type
+        ValueError: If list contains non-dict items
+    """
+    if expected_type == dict:
+        if not isinstance(response_data, dict):
+            raise TypeError(
+                f"Expected dict response, got {type(response_data).__name__}: {response_data}"
+            )
+        return response_data
+    elif expected_type == list:
+        if not isinstance(response_data, list):
+            raise TypeError(
+                f"Expected list response, got {type(response_data).__name__}: {response_data}"
+            )
+        # Validate all items in list are dicts
+        for i, item in enumerate(response_data):
+            if not isinstance(item, dict):
+                raise ValueError(
+                    f"Expected list of dicts, but item at index {i} is {type(item).__name__}: {item}"
+                )
+        return response_data
+    else:
+        raise ValueError(f"Unsupported expected_type: {expected_type}")
 
 
 def normalize_affiliate_id(affiliate_id: str | None) -> str | None:
