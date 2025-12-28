@@ -378,8 +378,6 @@ class AsyncSideShiftClient(BaseClient):
         Returns:
             Response JSON data
         """
-        import asyncio
-
         url = f"{self.base_url}{endpoint}"
         request_headers = self._get_headers(
             include_secret=require_auth, include_user_ip=require_user_ip
