@@ -7,6 +7,7 @@ import pytest
 import requests
 
 from sideshift_sdk.client import AsyncSideShiftClient, SideShiftClient
+from sideshift_sdk.constants import HEADER_REQUEST_ID
 from sideshift_sdk.exceptions import (
     SideShiftAPIError,
     SideShiftAuthenticationError,

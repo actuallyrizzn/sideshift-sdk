@@ -8,6 +8,7 @@ HEADER_CONTENT_TYPE = "Content-Type"
 HEADER_ACCEPT = "Accept"
 HEADER_SIDESHIFT_SECRET = "x-sideshift-secret"
 HEADER_USER_IP = "x-user-ip"
+HEADER_REQUEST_ID = "X-Request-ID"
 
 # Content Types
 CONTENT_TYPE_JSON = "application/json"
