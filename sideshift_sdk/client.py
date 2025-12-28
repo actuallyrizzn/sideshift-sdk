@@ -86,6 +86,18 @@ class BaseClient:
         self._response_hooks: list[ResponseHook | AsyncResponseHook] = []
         self._error_hooks: list[ErrorHook | AsyncErrorHook] = []
 
+    def set_secret(self, secret: str | None) -> None:
+        """Update the secret key for authentication.
+
+        This method allows rotating the secret without creating a new client instance.
+
+        Args:
+            secret: New secret key. If None, will attempt to read from SIDESHIFT_SECRET env var.
+        """
+        if secret is None:
+            secret = os.getenv("SIDESHIFT_SECRET")
+        self.secret = secret
+
     def _get_headers(
         self, include_secret: bool = False, include_user_ip: bool = False
     ) -> HeadersDict:
