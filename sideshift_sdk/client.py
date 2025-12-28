@@ -47,7 +47,9 @@ class BaseClient:
         self.user_ip = user_ip or os.getenv("SIDESHIFT_USER_IP")
         self.base_url = base_url or self.BASE_URL
 
-    def _get_headers(self, include_secret: bool = False, include_user_ip: bool = False) -> dict[str, str]:
+    def _get_headers(
+        self, include_secret: bool = False, include_user_ip: bool = False
+    ) -> dict[str, str]:
         """Get request headers.
 
         Args:
@@ -116,11 +118,15 @@ class BaseClient:
             error_data = {"message": error_text or "Unknown error"}
 
         if status_code == 401:
-            raise SideShiftAuthenticationError(error_data.get("message", "Authentication failed"), error_data)
+            raise SideShiftAuthenticationError(
+                error_data.get("message", "Authentication failed"), error_data
+            )
         elif status_code == 403:
             raise SideShiftForbiddenError(error_data.get("message", "Access forbidden"), error_data)
         elif status_code == 404:
-            raise SideShiftNotFoundError(error_data.get("message", "Resource not found"), error_data)
+            raise SideShiftNotFoundError(
+                error_data.get("message", "Resource not found"), error_data
+            )
         else:
             raise SideShiftAPIError(
                 error_data.get("message", f"API error: {status_code}"),
@@ -180,7 +186,9 @@ class SideShiftClient(BaseClient):
             Response JSON data
         """
         url = f"{self.base_url}{endpoint}"
-        request_headers = self._get_headers(include_secret=require_auth, include_user_ip=require_user_ip)
+        request_headers = self._get_headers(
+            include_secret=require_auth, include_user_ip=require_user_ip
+        )
         if headers:
             request_headers.update(headers)
 
@@ -226,7 +234,14 @@ class SideShiftClient(BaseClient):
         Returns:
             Response JSON data
         """
-        return self._request("GET", endpoint, params=params, headers=headers, require_auth=require_auth, require_user_ip=require_user_ip)
+        return self._request(
+            "GET",
+            endpoint,
+            params=params,
+            headers=headers,
+            require_auth=require_auth,
+            require_user_ip=require_user_ip,
+        )
 
     def post(
         self,
@@ -248,7 +263,14 @@ class SideShiftClient(BaseClient):
         Returns:
             Response JSON data
         """
-        return self._request("POST", endpoint, json_data=json_data, headers=headers, require_auth=require_auth, require_user_ip=require_user_ip)
+        return self._request(
+            "POST",
+            endpoint,
+            json_data=json_data,
+            headers=headers,
+            require_auth=require_auth,
+            require_user_ip=require_user_ip,
+        )
 
     def close(self) -> None:
         """Close the session."""
@@ -326,7 +348,9 @@ class AsyncSideShiftClient(BaseClient):
         import asyncio
 
         url = f"{self.base_url}{endpoint}"
-        request_headers = self._get_headers(include_secret=require_auth, include_user_ip=require_user_ip)
+        request_headers = self._get_headers(
+            include_secret=require_auth, include_user_ip=require_user_ip
+        )
         if headers:
             request_headers.update(headers)
 
@@ -373,7 +397,14 @@ class AsyncSideShiftClient(BaseClient):
         Returns:
             Response JSON data
         """
-        return await self._request("GET", endpoint, params=params, headers=headers, require_auth=require_auth, require_user_ip=require_user_ip)
+        return await self._request(
+            "GET",
+            endpoint,
+            params=params,
+            headers=headers,
+            require_auth=require_auth,
+            require_user_ip=require_user_ip,
+        )
 
     async def post(
         self,
@@ -395,7 +426,14 @@ class AsyncSideShiftClient(BaseClient):
         Returns:
             Response JSON data
         """
-        return await self._request("POST", endpoint, json_data=json_data, headers=headers, require_auth=require_auth, require_user_ip=require_user_ip)
+        return await self._request(
+            "POST",
+            endpoint,
+            json_data=json_data,
+            headers=headers,
+            require_auth=require_auth,
+            require_user_ip=require_user_ip,
+        )
 
     async def close(self) -> None:
         """Close the async client."""
@@ -410,4 +448,3 @@ class AsyncSideShiftClient(BaseClient):
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Async context manager exit."""
         await self.close()
-

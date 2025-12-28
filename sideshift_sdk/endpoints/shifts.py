@@ -58,7 +58,9 @@ def get_bulk_shifts(client: "SideShiftClient", shift_ids: list[str]) -> list[Shi
     return [Shift(**shift_data) for shift_data in response]
 
 
-async def get_bulk_shifts_async(client: "AsyncSideShiftClient", shift_ids: list[str]) -> list[Shift]:
+async def get_bulk_shifts_async(
+    client: "AsyncSideShiftClient", shift_ids: list[str]
+) -> list[Shift]:
     """Get multiple shifts (async).
 
     Args:
@@ -91,7 +93,9 @@ def get_recent_shifts(client: "SideShiftClient", limit: int = 10) -> list[Recent
     return [RecentShift(**shift_data) for shift_data in response]
 
 
-async def get_recent_shifts_async(client: "AsyncSideShiftClient", limit: int = 10) -> list[RecentShift]:
+async def get_recent_shifts_async(
+    client: "AsyncSideShiftClient", limit: int = 10
+) -> list[RecentShift]:
     """Get recent completed shifts (async).
 
     Args:
@@ -411,4 +415,3 @@ async def cancel_order_async(client: "AsyncSideShiftClient", order_id: str) -> N
         json_data=request_data.model_dump(by_alias=True),
         require_auth=True,
     )
-

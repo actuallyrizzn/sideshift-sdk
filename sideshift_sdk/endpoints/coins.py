@@ -94,4 +94,3 @@ async def get_coin_icon_async(
         return b""  # Should not reach here, but satisfy type checker
 
     return response.content
-

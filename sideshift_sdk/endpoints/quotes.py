@@ -126,4 +126,3 @@ async def request_quote_async(
         require_user_ip=bool(user_ip or client.user_ip),
     )
     return Quote(**response)
-

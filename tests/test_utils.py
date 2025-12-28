@@ -54,5 +54,3 @@ def test_build_coin_network():
 
     # Test with empty network
     assert build_coin_network("btc", "") == "btc-"
-
-

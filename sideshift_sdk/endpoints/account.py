@@ -57,7 +57,9 @@ def get_permissions(client: "SideShiftClient", user_ip: str | None = None) -> Pe
     return Permissions(**response)
 
 
-async def get_permissions_async(client: "AsyncSideShiftClient", user_ip: str | None = None) -> Permissions:
+async def get_permissions_async(
+    client: "AsyncSideShiftClient", user_ip: str | None = None
+) -> Permissions:
     """Get permissions for creating shifts (async).
 
     Args:
@@ -104,4 +106,3 @@ async def get_xai_stats_async(client: "AsyncSideShiftClient") -> XAIStats:
     """
     response = await client.get("/xai/stats", require_auth=False)
     return XAIStats(**response)
-

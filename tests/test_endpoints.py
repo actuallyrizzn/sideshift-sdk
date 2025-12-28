@@ -504,7 +504,9 @@ def test_set_refund_address_with_memo():
     }
 
     with patch.object(client, "post", return_value=mock_response):
-        shift = shifts.set_refund_address(client, shift_id="test-shift-id", address="bc1q...", memo="12345")
+        shift = shifts.set_refund_address(
+            client, shift_id="test-shift-id", address="bc1q...", memo="12345"
+        )
         assert shift.refund_memo == "12345"
 
 
@@ -864,7 +866,9 @@ async def test_set_refund_address_async():
         }
 
         with patch.object(client, "post", return_value=mock_response):
-            shift = await shifts.set_refund_address_async(client, shift_id="test-shift-id", address="bc1q...")
+            shift = await shifts.set_refund_address_async(
+                client, shift_id="test-shift-id", address="bc1q..."
+            )
             assert shift.refund_address == "bc1q..."
 
 
@@ -957,7 +961,9 @@ async def test_get_checkout_async():
 @pytest.mark.asyncio
 async def test_create_checkout_async():
     """Test create_checkout_async endpoint."""
-    async with AsyncSideShiftClient(secret="test-secret", affiliate_id="test-affiliate", user_ip="1.2.3.4") as client:
+    async with AsyncSideShiftClient(
+        secret="test-secret", affiliate_id="test-affiliate", user_ip="1.2.3.4"
+    ) as client:
         mock_response = {
             "id": "test-checkout-id",
             "settleCoin": "eth",
@@ -983,4 +989,3 @@ async def test_create_checkout_async():
                 cancel_url="https://example.com/cancel",
             )
             assert checkout_obj.id == "test-checkout-id"
-

@@ -242,4 +242,3 @@ def test_cancel_order_request_model():
     """Test CancelOrderRequest model validation."""
     request = CancelOrderRequest(order_id="test-order-id")
     assert request.order_id == "test-order-id"
-

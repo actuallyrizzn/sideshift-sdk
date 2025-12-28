@@ -81,7 +81,9 @@ def create_checkout(
         headers["x-user-ip"] = user_ip or client.user_ip or ""
 
     if not (user_ip or client.user_ip):
-        raise ValueError("user_ip is required for create_checkout (or set via client/user_ip parameter)")
+        raise ValueError(
+            "user_ip is required for create_checkout (or set via client/user_ip parameter)"
+        )
 
     response = client.post(
         "/checkout",
@@ -138,7 +140,9 @@ async def create_checkout_async(
         headers["x-user-ip"] = user_ip or client.user_ip or ""
 
     if not (user_ip or client.user_ip):
-        raise ValueError("user_ip is required for create_checkout (or set via client/user_ip parameter)")
+        raise ValueError(
+            "user_ip is required for create_checkout (or set via client/user_ip parameter)"
+        )
 
     response = await client.post(
         "/checkout",
@@ -148,4 +152,3 @@ async def create_checkout_async(
         require_user_ip=True,
     )
     return Checkout(**response)
-

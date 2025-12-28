@@ -25,7 +25,9 @@ def test_client_initialization():
 
 def test_client_initialization_from_env():
     """Test client initialization from environment variables."""
-    with patch.dict(os.environ, {"SIDESHIFT_SECRET": "env-secret", "AFFILIATE_ID": "env-affiliate"}):
+    with patch.dict(
+        os.environ, {"SIDESHIFT_SECRET": "env-secret", "AFFILIATE_ID": "env-affiliate"}
+    ):
         client = SideShiftClient()
         assert client.secret == "env-secret"
         assert client.affiliate_id == "env-affiliate"
@@ -238,7 +240,11 @@ def test_client_rate_limit_retry(mock_session_class):
     client = SideShiftClient(secret="test-secret")
 
     # Mock the _handle_response to raise rate limit error
-    with patch.object(client, "_handle_response", side_effect=[SideShiftRateLimitError("Rate limited"), {"data": "success"}]):
+    with patch.object(
+        client,
+        "_handle_response",
+        side_effect=[SideShiftRateLimitError("Rate limited"), {"data": "success"}],
+    ):
         # This will fail because we're not properly handling the retry in the test
         # But we can test the structure
         pass
@@ -306,4 +312,3 @@ async def test_async_client_get():
 
             result = await client.get("/test", require_auth=True)
             assert result == {"data": "test"}
-

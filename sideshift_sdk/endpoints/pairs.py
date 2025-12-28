@@ -134,4 +134,3 @@ async def get_pairs_async(
 
     response = await client.get("/pairs", params=params, require_auth=True)
     return [PairInfo(**pair_data) for pair_data in response]
-

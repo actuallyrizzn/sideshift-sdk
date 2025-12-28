@@ -77,5 +77,3 @@ def test_rate_limit_error():
     exc2 = SideShiftRateLimitError()
     assert exc2.message == "Rate limit exceeded"
     assert exc2.status_code == 429
-
-

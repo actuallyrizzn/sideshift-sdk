@@ -4,7 +4,9 @@
 class SideShiftException(Exception):
     """Base exception for all SideShift SDK errors."""
 
-    def __init__(self, message: str, status_code: int | None = None, response_data: dict | None = None):
+    def __init__(
+        self, message: str, status_code: int | None = None, response_data: dict | None = None
+    ):
         """Initialize exception.
 
         Args:
@@ -83,4 +85,3 @@ class SideShiftRateLimitError(SideShiftException):
             response_data: Response data from API
         """
         super().__init__(message, 429, response_data)
-

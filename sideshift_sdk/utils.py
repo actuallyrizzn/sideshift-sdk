@@ -42,4 +42,3 @@ def build_coin_network(coin: str, network: str | None = None) -> str:
     if network is None:
         return coin
     return f"{coin}-{network}"
-
