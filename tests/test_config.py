@@ -298,3 +298,23 @@ async def test_async_client_uses_config_proxy():
     async with AsyncSideShiftClient(secret="test-secret", proxy="http://proxy.example.com:8080") as client:
         assert client.proxy == "http://proxy.example.com:8080"
 
+
+def test_client_uses_config_max_retries():
+    """Test that client uses configurable max retries."""
+    client = SideShiftClient(secret="test-secret", max_retries=5)
+    assert client.max_retries == 5
+
+
+def test_client_uses_env_max_retries():
+    """Test that client uses max retries from environment variable."""
+    with patch.dict(os.environ, {"SIDESHIFT_MAX_RETRIES": "7"}):
+        client = SideShiftClient(secret="test-secret")
+        assert client.max_retries == 7
+
+
+@pytest.mark.asyncio
+async def test_async_client_uses_config_max_retries():
+    """Test that async client uses configurable max retries."""
+    async with AsyncSideShiftClient(secret="test-secret", max_retries=5) as client:
+        assert client.max_retries == 5
+
