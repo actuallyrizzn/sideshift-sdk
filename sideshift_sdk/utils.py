@@ -12,7 +12,12 @@ def validate_non_empty_string(value: str | None, param_name: str) -> None:
 
     Raises:
         ValueError: If value is None or empty string
+        TypeError: If value or param_name is not the expected type
     """
+    if not isinstance(param_name, str):
+        raise TypeError(f"param_name must be a string, got {type(param_name).__name__}")
+    if not param_name.strip():
+        raise ValueError("param_name cannot be empty")
     if value is None:
         raise ValueError(f"{param_name} cannot be None")
     if not isinstance(value, str):
@@ -30,7 +35,12 @@ def validate_positive_amount(amount: str | None, param_name: str) -> None:
 
     Raises:
         ValueError: If amount is invalid or non-positive
+        TypeError: If amount or param_name is not the expected type
     """
+    if not isinstance(param_name, str):
+        raise TypeError(f"param_name must be a string, got {type(param_name).__name__}")
+    if not param_name.strip():
+        raise ValueError("param_name cannot be empty")
     if amount is None:
         return  # None is allowed for optional amounts
     if not isinstance(amount, str):
@@ -58,9 +68,13 @@ def validate_response_data(response_data: Any, expected_type: type = dict) -> di
         Validated response data
 
     Raises:
-        TypeError: If response data doesn't match expected type
+        TypeError: If response data doesn't match expected type or expected_type is invalid
         ValueError: If list contains non-dict items
     """
+    if not isinstance(expected_type, type):
+        raise TypeError(f"expected_type must be a type, got {type(expected_type).__name__}")
+    if expected_type not in (dict, list):
+        raise ValueError(f"expected_type must be dict or list, got {expected_type.__name__}")
     if expected_type == dict:
         if not isinstance(response_data, dict):
             raise TypeError(
@@ -91,10 +105,15 @@ def normalize_affiliate_id(affiliate_id: str | None) -> str | None:
 
     Returns:
         None if affiliate_id is None or empty string, otherwise the string
+
+    Raises:
+        TypeError: If affiliate_id is not a string or None
     """
+    if affiliate_id is not None and not isinstance(affiliate_id, str):
+        raise TypeError(f"affiliate_id must be a string or None, got {type(affiliate_id).__name__}")
     if affiliate_id is None:
         return None
-    if isinstance(affiliate_id, str) and not affiliate_id.strip():
+    if not affiliate_id.strip():
         return None
     return affiliate_id
 
@@ -109,7 +128,25 @@ def exponential_backoff(attempt: int, base_delay: float = 1.0, max_delay: float 
 
     Returns:
         Delay in seconds
+
+    Raises:
+        TypeError: If attempt is not an int or delays are not numbers
+        ValueError: If attempt is negative or delays are non-positive
     """
+    if not isinstance(attempt, int):
+        raise TypeError(f"attempt must be an int, got {type(attempt).__name__}")
+    if attempt < 0:
+        raise ValueError(f"attempt must be non-negative, got {attempt}")
+    if not isinstance(base_delay, (int, float)):
+        raise TypeError(f"base_delay must be a number, got {type(base_delay).__name__}")
+    if base_delay <= 0:
+        raise ValueError(f"base_delay must be positive, got {base_delay}")
+    if not isinstance(max_delay, (int, float)):
+        raise TypeError(f"max_delay must be a number, got {type(max_delay).__name__}")
+    if max_delay <= 0:
+        raise ValueError(f"max_delay must be positive, got {max_delay}")
+    if max_delay < base_delay:
+        raise ValueError(f"max_delay ({max_delay}) must be >= base_delay ({base_delay})")
     delay = min(base_delay * (2**attempt), max_delay)
     return delay
 
