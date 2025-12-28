@@ -7,6 +7,14 @@ from typing import Any
 import httpx
 import requests
 
+from sideshift_sdk.constants import (
+    BASE_URL,
+    CONTENT_TYPE_JSON,
+    HEADER_ACCEPT,
+    HEADER_CONTENT_TYPE,
+    HEADER_SIDESHIFT_SECRET,
+    HEADER_USER_IP,
+)
 from sideshift_sdk.exceptions import (
     SideShiftAPIError,
     SideShiftAuthenticationError,
@@ -21,7 +29,7 @@ from sideshift_sdk.utils import exponential_backoff
 class BaseClient:
     """Base client with common functionality."""
 
-    BASE_URL = "https://sideshift.ai/api/v2"
+    BASE_URL = BASE_URL  # Use constant from constants module
 
     def __init__(
         self,
@@ -58,13 +66,16 @@ class BaseClient:
         Returns:
             Headers dictionary
         """
-        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        headers = {
+            HEADER_CONTENT_TYPE: CONTENT_TYPE_JSON,
+            HEADER_ACCEPT: CONTENT_TYPE_JSON,
+        }
 
         if include_secret and self.secret:
-            headers["x-sideshift-secret"] = self.secret
+            headers[HEADER_SIDESHIFT_SECRET] = self.secret
 
         if include_user_ip and self.user_ip:
-            headers["x-user-ip"] = self.user_ip
+            headers[HEADER_USER_IP] = self.user_ip
 
         return headers
 

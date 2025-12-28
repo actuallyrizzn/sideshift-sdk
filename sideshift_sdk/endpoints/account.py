@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING
 
+from sideshift_sdk.constants import HEADER_USER_IP
 from sideshift_sdk.models import Account, Permissions, XAIStats
 
 if TYPE_CHECKING:
@@ -51,7 +52,7 @@ def get_permissions(client: "SideShiftClient", user_ip: str | None = None) -> Pe
     """
     headers = {}
     if user_ip or client.user_ip:
-        headers["x-user-ip"] = user_ip or client.user_ip or ""
+        headers[HEADER_USER_IP] = user_ip or client.user_ip or ""
 
     response = client.get(
         "/permissions",
@@ -76,7 +77,7 @@ async def get_permissions_async(
     """
     headers = {}
     if user_ip or client.user_ip:
-        headers["x-user-ip"] = user_ip or client.user_ip or ""
+        headers[HEADER_USER_IP] = user_ip or client.user_ip or ""
 
     response = await client.get(
         "/permissions",

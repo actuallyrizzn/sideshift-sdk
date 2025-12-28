@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING
 
+from sideshift_sdk.constants import HEADER_USER_IP
 from sideshift_sdk.models import Checkout, CheckoutRequest
 
 if TYPE_CHECKING:
@@ -92,7 +93,7 @@ def create_checkout(
 
     headers = {}
     if user_ip or client.user_ip:
-        headers["x-user-ip"] = user_ip or client.user_ip or ""
+        headers[HEADER_USER_IP] = user_ip or client.user_ip or ""
 
     if not (user_ip or client.user_ip):
         raise ValueError(
@@ -151,7 +152,7 @@ async def create_checkout_async(
 
     headers = {}
     if user_ip or client.user_ip:
-        headers["x-user-ip"] = user_ip or client.user_ip or ""
+        headers[HEADER_USER_IP] = user_ip or client.user_ip or ""
 
     if not (user_ip or client.user_ip):
         raise ValueError(

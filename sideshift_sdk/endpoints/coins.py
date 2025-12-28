@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING
 
+from sideshift_sdk.constants import HEADER_ACCEPT, IMAGE_FORMAT_PNG, IMAGE_FORMAT_SVG
 from sideshift_sdk.models import Coin
 
 if TYPE_CHECKING:
@@ -56,8 +57,8 @@ def get_coin_icon(
     Returns:
         Icon image bytes
     """
-    accept_header = f"image/{format}+xml" if format == "svg" else f"image/{format}"
-    headers = {"Accept": accept_header}
+    accept_header = f"image/{format}+xml" if format == IMAGE_FORMAT_SVG else f"image/{format}"
+    headers = {HEADER_ACCEPT: accept_header}
 
     response = client._session.get(
         f"{client.base_url}/coins/icon/{coin_network}",
@@ -87,8 +88,8 @@ async def get_coin_icon_async(
     Returns:
         Icon image bytes
     """
-    accept_header = f"image/{format}+xml" if format == "svg" else f"image/{format}"
-    headers = {"Accept": accept_header}
+    accept_header = f"image/{format}+xml" if format == IMAGE_FORMAT_SVG else f"image/{format}"
+    headers = {HEADER_ACCEPT: accept_header}
 
     httpx_client = await client._get_client()
     response = await httpx_client.get(
