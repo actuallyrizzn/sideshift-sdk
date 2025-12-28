@@ -1,7 +1,7 @@
 """Basic usage examples for SideShift SDK."""
 
 from sideshift_sdk import SideShiftClient
-from sideshift_sdk.endpoints import account, coins, pairs, quotes, shifts
+from sideshift_sdk.endpoints import account, checkout, coins, pairs, quotes, shifts
 
 
 def example_get_coins():
@@ -116,6 +116,165 @@ def example_get_account():
     print(f"Total Balance: {account_info.total_balance}")
 
 
+def example_get_pairs():
+    """Example: Get multiple pairs information."""
+    client = SideShiftClient(
+        secret="your-secret-key",
+        affiliate_id="your-affiliate-id",
+    )
+
+    # Get information for multiple pairs
+    pairs_list = pairs.get_pairs(
+        client,
+        pairs=["btc-mainnet", "eth-mainnet", "usdc-bsc"],
+    )
+
+    for pair in pairs_list:
+        print(f"{pair.from_coin} -> {pair.to_coin}")
+        print(f"  Rate: {pair.rate}, Min: {pair.min}, Max: {pair.max}")
+
+
+def example_get_shift():
+    """Example: Get shift information."""
+    client = SideShiftClient()
+
+    # Get a specific shift (no auth required for public shifts)
+    shift = shifts.get_shift(client, shift_id="your-shift-id")
+
+    print(f"Shift ID: {shift.id}")
+    print(f"Status: {shift.status}")
+    print(f"Deposit Address: {shift.deposit_address}")
+    print(f"Settle Address: {shift.settle_address}")
+
+
+def example_get_bulk_shifts():
+    """Example: Get multiple shifts."""
+    client = SideShiftClient()
+
+    # Get multiple shifts by IDs
+    shift_ids = ["shift-id-1", "shift-id-2", "shift-id-3"]
+    shifts_list = shifts.get_bulk_shifts(client, shift_ids=shift_ids)
+
+    for shift in shifts_list:
+        print(f"{shift.id}: {shift.status}")
+
+
+def example_get_recent_shifts():
+    """Example: Get recent completed shifts."""
+    client = SideShiftClient()
+
+    # Get recent completed shifts (limit 1-100)
+    recent_shifts = shifts.get_recent_shifts(client, limit=10)
+
+    print(f"Found {len(recent_shifts)} recent shifts")
+    for shift in recent_shifts:
+        print(f"  {shift.id}: {shift.status} - {shift.deposit_coin} -> {shift.settle_coin}")
+
+
+def example_set_refund_address():
+    """Example: Set refund address for a shift."""
+    client = SideShiftClient(secret="your-secret-key")
+
+    # Set refund address for a shift
+    updated_shift = shifts.set_refund_address(
+        client,
+        shift_id="your-shift-id",
+        address="0x...",
+        memo="optional-memo",  # Required for some coins like XRP
+    )
+
+    print(f"Refund address updated for shift {updated_shift.id}")
+
+
+def example_cancel_order():
+    """Example: Cancel an order."""
+    client = SideShiftClient(secret="your-secret-key")
+
+    # Cancel an order
+    shifts.cancel_order(client, order_id="your-order-id")
+
+    print("Order cancelled successfully")
+
+
+def example_get_permissions():
+    """Example: Check permissions."""
+    client = SideShiftClient(user_ip="1.2.3.4")
+
+    # Check permissions for creating shifts
+    permissions = account.get_permissions(client, user_ip="1.2.3.4")
+
+    print(f"Can create shifts: {permissions.can_create_shifts}")
+    print(f"Can create checkouts: {permissions.can_create_checkouts}")
+
+
+def example_get_xai_stats():
+    """Example: Get XAI statistics."""
+    client = SideShiftClient()
+
+    # Get XAI coin statistics
+    xai_stats = account.get_xai_stats(client)
+
+    print(f"XAI Price (USD): ${xai_stats.xai_price_usd}")
+    print(f"XAI Supply: {xai_stats.xai_supply}")
+
+
+def example_get_coin_icon():
+    """Example: Get coin icon."""
+    client = SideShiftClient()
+
+    # Get coin icon as SVG
+    icon_svg = coins.get_coin_icon(client, coin_network="btc", format="svg")
+
+    # Get coin icon as PNG
+    icon_png = coins.get_coin_icon(client, coin_network="eth", format="png")
+
+    # Save icon to file
+    with open("btc-icon.svg", "wb") as f:
+        f.write(icon_svg)
+
+    with open("eth-icon.png", "wb") as f:
+        f.write(icon_png)
+
+    print("Icons saved successfully")
+
+
+def example_get_checkout():
+    """Example: Get checkout information."""
+    client = SideShiftClient()
+
+    # Get checkout information (no auth required)
+    checkout_info = checkout.get_checkout(client, checkout_id="your-checkout-id")
+
+    print(f"Checkout ID: {checkout_info.id}")
+    print(f"Settle Coin: {checkout_info.settle_coin}")
+    print(f"Settle Amount: {checkout_info.settle_amount}")
+
+
+def example_create_checkout():
+    """Example: Create a checkout."""
+    client = SideShiftClient(
+        secret="your-secret-key",
+        affiliate_id="your-affiliate-id",
+        user_ip="1.2.3.4",
+    )
+
+    # Create a checkout
+    checkout_info = checkout.create_checkout(
+        client,
+        settle_coin="eth",
+        settle_network="mainnet",
+        settle_amount="1.0",
+        settle_address="0x...",
+        affiliate_id="your-affiliate-id",
+        success_url="https://example.com/success",
+        cancel_url="https://example.com/cancel",
+        settle_memo="optional-memo",  # Required for some coins
+    )
+
+    print(f"Checkout created: {checkout_info.id}")
+    print(f"Checkout URL: {checkout_info.checkout_url}")
+
+
 if __name__ == "__main__":
     # Uncomment the example you want to run:
     # example_get_coins()
@@ -123,5 +282,16 @@ if __name__ == "__main__":
     # example_fixed_shift()
     # example_variable_shift()
     # example_get_account()
+    # example_get_pairs()
+    # example_get_shift()
+    # example_get_bulk_shifts()
+    # example_get_recent_shifts()
+    # example_set_refund_address()
+    # example_cancel_order()
+    # example_get_permissions()
+    # example_get_xai_stats()
+    # example_get_coin_icon()
+    # example_get_checkout()
+    # example_create_checkout()
     pass
 
