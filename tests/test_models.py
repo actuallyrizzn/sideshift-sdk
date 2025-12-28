@@ -17,6 +17,7 @@ from sideshift_sdk.models import (
     RecentShift,
     SetRefundAddressRequest,
     Shift,
+    TokenNetworkDetails,
     VariableShiftRequest,
     XAIStats,
 )
@@ -242,3 +243,115 @@ def test_cancel_order_request_model():
     """Test CancelOrderRequest model validation."""
     request = CancelOrderRequest(order_id="test-order-id")
     assert request.order_id == "test-order-id"
+
+
+def test_quote_request_validation_empty_strings():
+    """Test QuoteRequest validation rejects empty strings."""
+    with pytest.raises(ValidationError):
+        QuoteRequest(
+            depositCoin="",
+            settleCoin="eth",
+            affiliateId="affiliate-123",
+            depositAmount="1.0"
+        )
+    with pytest.raises(ValidationError):
+        QuoteRequest(
+            depositCoin="btc",
+            settleCoin="",
+            affiliateId="affiliate-123",
+            depositAmount="1.0"
+        )
+
+
+def test_quote_request_validation_negative_amounts():
+    """Test QuoteRequest validation rejects negative amounts."""
+    with pytest.raises(ValidationError, match="must be positive"):
+        QuoteRequest(
+            depositCoin="btc",
+            settleCoin="eth",
+            affiliateId="affiliate-123",
+            depositAmount="-1.0"
+        )
+    with pytest.raises(ValidationError, match="must be positive"):
+        QuoteRequest(
+            depositCoin="btc",
+            settleCoin="eth",
+            affiliateId="affiliate-123",
+            settleAmount="-1.0"
+        )
+
+
+def test_quote_request_validation_zero_amounts():
+    """Test QuoteRequest validation rejects zero amounts."""
+    with pytest.raises(ValidationError, match="must be positive"):
+        QuoteRequest(
+            depositCoin="btc",
+            settleCoin="eth",
+            affiliateId="affiliate-123",
+            depositAmount="0"
+        )
+
+
+def test_quote_request_validation_invalid_amount_format():
+    """Test QuoteRequest validation rejects invalid amount formats."""
+    with pytest.raises(ValidationError, match="must be a valid number"):
+        QuoteRequest(
+            depositCoin="btc",
+            settleCoin="eth",
+            affiliateId="affiliate-123",
+            depositAmount="not-a-number"
+        )
+
+
+def test_checkout_request_validation_positive_amount():
+    """Test CheckoutRequest validation for positive settle_amount."""
+    with pytest.raises(ValidationError, match="must be positive"):
+        CheckoutRequest(
+            settleCoin="eth",
+            settleNetwork="mainnet",
+            settleAmount="-1.0",
+            settleAddress="0x123",
+            affiliateId="affiliate-123",
+            successUrl="https://example.com/success",
+            cancelUrl="https://example.com/cancel"
+        )
+
+
+def test_token_network_details_validation():
+    """Test TokenNetworkDetails validation."""
+    # Valid
+    details = TokenNetworkDetails(contractAddress="0x123", decimals=18)
+    assert details.decimals == 18
+    
+    # Invalid: negative decimals
+    with pytest.raises(ValidationError):
+        TokenNetworkDetails(contractAddress="0x123", decimals=-1)
+    
+    # Invalid: zero decimals
+    with pytest.raises(ValidationError):
+        TokenNetworkDetails(contractAddress="0x123", decimals=0)
+    
+    # Invalid: empty contract address
+    with pytest.raises(ValidationError):
+        TokenNetworkDetails(contractAddress="", decimals=18)
+
+
+def test_fixed_shift_request_validation_empty_strings():
+    """Test FixedShiftRequest validation rejects empty strings."""
+    with pytest.raises(ValidationError):
+        FixedShiftRequest(
+            settleAddress="",
+            affiliateId="affiliate-123",
+            quoteId="quote-123"
+        )
+
+
+def test_variable_shift_request_validation_empty_strings():
+    """Test VariableShiftRequest validation rejects empty strings."""
+    with pytest.raises(ValidationError):
+        VariableShiftRequest(
+            depositCoin="",
+            settleCoin="eth",
+            settleAddress="0x123",
+            affiliateId="affiliate-123"
+        )
