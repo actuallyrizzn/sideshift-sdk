@@ -15,6 +15,7 @@ from sideshift_sdk.constants import (
     HEADER_SIDESHIFT_SECRET,
     HEADER_USER_IP,
 )
+from sideshift_sdk.types import HeadersDict, JsonDict
 from sideshift_sdk.exceptions import (
     SideShiftAPIError,
     SideShiftAuthenticationError,
@@ -56,7 +57,7 @@ class BaseClient:
 
     def _get_headers(
         self, include_secret: bool = False, include_user_ip: bool = False
-    ) -> dict[str, str]:
+    ) -> HeadersDict:
         """Get request headers.
 
         Args:
@@ -79,7 +80,7 @@ class BaseClient:
 
         return headers
 
-    def _handle_response(self, response: requests.Response | httpx.Response) -> dict[str, Any]:
+    def _handle_response(self, response: requests.Response | httpx.Response) -> JsonDict:
         """Handle HTTP response and raise appropriate exceptions.
 
         Args:
@@ -173,13 +174,13 @@ class SideShiftClient(BaseClient):
         self,
         method: str,
         endpoint: str,
-        params: dict[str, Any] | None = None,
-        json_data: dict[str, Any] | None = None,
-        headers: dict[str, str] | None = None,
+        params: JsonDict | None = None,
+        json_data: JsonDict | None = None,
+        headers: HeadersDict | None = None,
         require_auth: bool = False,
         require_user_ip: bool = False,
         max_retries: int = 3,
-    ) -> dict[str, Any]:
+    ) -> JsonDict:
         """Make HTTP request with retry logic.
 
         Args:
@@ -227,11 +228,11 @@ class SideShiftClient(BaseClient):
     def get(
         self,
         endpoint: str,
-        params: dict[str, Any] | None = None,
-        headers: dict[str, str] | None = None,
+        params: JsonDict | None = None,
+        headers: HeadersDict | None = None,
         require_auth: bool = False,
         require_user_ip: bool = False,
-    ) -> dict[str, Any]:
+    ) -> JsonDict:
         """Make GET request.
 
         Args:
@@ -256,11 +257,11 @@ class SideShiftClient(BaseClient):
     def post(
         self,
         endpoint: str,
-        json_data: dict[str, Any] | None = None,
-        headers: dict[str, str] | None = None,
+        json_data: JsonDict | None = None,
+        headers: HeadersDict | None = None,
         require_auth: bool = False,
         require_user_ip: bool = False,
-    ) -> dict[str, Any]:
+    ) -> JsonDict:
         """Make POST request.
 
         Args:
@@ -333,13 +334,13 @@ class AsyncSideShiftClient(BaseClient):
         self,
         method: str,
         endpoint: str,
-        params: dict[str, Any] | None = None,
-        json_data: dict[str, Any] | None = None,
-        headers: dict[str, str] | None = None,
+        params: JsonDict | None = None,
+        json_data: JsonDict | None = None,
+        headers: HeadersDict | None = None,
         require_auth: bool = False,
         require_user_ip: bool = False,
         max_retries: int = 3,
-    ) -> dict[str, Any]:
+    ) -> JsonDict:
         """Make HTTP request with retry logic.
 
         Args:
@@ -390,11 +391,11 @@ class AsyncSideShiftClient(BaseClient):
     async def get(
         self,
         endpoint: str,
-        params: dict[str, Any] | None = None,
-        headers: dict[str, str] | None = None,
+        params: JsonDict | None = None,
+        headers: HeadersDict | None = None,
         require_auth: bool = False,
         require_user_ip: bool = False,
-    ) -> dict[str, Any]:
+    ) -> JsonDict:
         """Make GET request.
 
         Args:
@@ -419,11 +420,11 @@ class AsyncSideShiftClient(BaseClient):
     async def post(
         self,
         endpoint: str,
-        json_data: dict[str, Any] | None = None,
-        headers: dict[str, str] | None = None,
+        json_data: JsonDict | None = None,
+        headers: HeadersDict | None = None,
         require_auth: bool = False,
         require_user_ip: bool = False,
-    ) -> dict[str, Any]:
+    ) -> JsonDict:
         """Make POST request.
 
         Args:
