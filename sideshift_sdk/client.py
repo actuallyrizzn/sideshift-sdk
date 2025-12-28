@@ -21,6 +21,7 @@ from sideshift_sdk.exceptions import (
     SideShiftAuthenticationError,
     SideShiftException,
     SideShiftForbiddenError,
+    SideShiftNetworkError,
     SideShiftNotFoundError,
     SideShiftRateLimitError,
 )
@@ -236,6 +237,15 @@ class SideShiftClient(BaseClient):
                     time.sleep(wait_time)
                     continue
                 raise
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                # Network errors - raise SDK exception with better message
+                error_msg = f"Network error: {str(e)}"
+                if isinstance(e, requests.exceptions.Timeout):
+                    error_msg = f"Request timeout after {self.timeout} seconds"
+                raise SideShiftNetworkError(error_msg, original_error=e)
+            except requests.exceptions.RequestException as e:
+                # Other requests exceptions (DNS, SSL, etc.)
+                raise SideShiftNetworkError(f"Network request failed: {str(e)}", original_error=e)
 
     def get(
         self,
@@ -397,6 +407,15 @@ class AsyncSideShiftClient(BaseClient):
                     await asyncio.sleep(wait_time)
                     continue
                 raise
+            except (httpx.ConnectError, httpx.TimeoutException) as e:
+                # Network errors - raise SDK exception with better message
+                error_msg = f"Network error: {str(e)}"
+                if isinstance(e, httpx.TimeoutException):
+                    error_msg = f"Request timeout after {self.timeout} seconds"
+                raise SideShiftNetworkError(error_msg, original_error=e)
+            except httpx.RequestError as e:
+                # Other httpx request exceptions (DNS, SSL, etc.)
+                raise SideShiftNetworkError(f"Network request failed: {str(e)}", original_error=e)
 
     async def get(
         self,

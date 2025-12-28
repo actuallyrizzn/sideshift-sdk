@@ -15,6 +15,7 @@ from sideshift_sdk.exceptions import (
     SideShiftAuthenticationError,
     SideShiftException,
     SideShiftForbiddenError,
+    SideShiftNetworkError,
     SideShiftNotFoundError,
     SideShiftRateLimitError,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "SideShiftAPIError",
     "SideShiftAuthenticationError",
     "SideShiftForbiddenError",
+    "SideShiftNetworkError",
     "SideShiftNotFoundError",
     "SideShiftRateLimitError",
 ]

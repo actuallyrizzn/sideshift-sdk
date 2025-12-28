@@ -85,3 +85,17 @@ class SideShiftRateLimitError(SideShiftException):
             response_data: Response data from API
         """
         super().__init__(message, 429, response_data)
+
+
+class SideShiftNetworkError(SideShiftException):
+    """Raised when a network error occurs (connection, timeout, DNS, etc.)."""
+
+    def __init__(self, message: str, original_error: Exception | None = None):
+        """Initialize network error.
+
+        Args:
+            message: Error message
+            original_error: Original exception that caused the network error
+        """
+        super().__init__(message, status_code=None, response_data=None)
+        self.original_error = original_error

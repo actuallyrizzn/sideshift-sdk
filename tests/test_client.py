@@ -11,6 +11,7 @@ from sideshift_sdk.exceptions import (
     SideShiftAPIError,
     SideShiftAuthenticationError,
     SideShiftForbiddenError,
+    SideShiftNetworkError,
     SideShiftNotFoundError,
     SideShiftRateLimitError,
 )
@@ -343,3 +344,50 @@ async def test_async_client_get():
 
             result = await client.get("/test", require_auth=True)
             assert result == {"data": "test"}
+
+
+def test_client_network_error_connection():
+    """Test network error handling for connection errors."""
+    client = SideShiftClient()
+    mock_session = Mock()
+    mock_session.request.side_effect = requests.exceptions.ConnectionError("Connection refused")
+    client._session = mock_session
+
+    with pytest.raises(SideShiftNetworkError) as exc_info:
+        client.get("/test")
+
+    assert "Network error" in exc_info.value.message
+    assert exc_info.value.original_error is not None
+    assert isinstance(exc_info.value.original_error, requests.exceptions.ConnectionError)
+
+
+def test_client_network_error_timeout():
+    """Test network error handling for timeout errors."""
+    client = SideShiftClient(timeout=5)
+    mock_session = Mock()
+    mock_session.request.side_effect = requests.exceptions.Timeout("Request timed out")
+    client._session = mock_session
+
+    with pytest.raises(SideShiftNetworkError) as exc_info:
+        client.get("/test")
+
+    assert "timeout" in exc_info.value.message.lower()
+    assert "5 seconds" in exc_info.value.message
+    assert exc_info.value.original_error is not None
+
+
+@pytest.mark.asyncio
+async def test_async_client_network_error():
+    """Test async network error handling."""
+    import httpx
+
+    client = AsyncSideShiftClient()
+    mock_client = AsyncMock()
+    mock_client.request.side_effect = httpx.ConnectError("Connection refused")
+    client._client = mock_client
+
+    with pytest.raises(SideShiftNetworkError) as exc_info:
+        await client._request("GET", "/test")
+
+    assert "Network error" in exc_info.value.message
+    assert exc_info.value.original_error is not None
