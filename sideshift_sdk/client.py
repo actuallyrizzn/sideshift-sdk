@@ -197,7 +197,7 @@ class SideShiftClient(BaseClient):
 
                 return self._handle_response(response)
 
-            except SideShiftRateLimitError as e:
+            except SideShiftRateLimitError:
                 if attempt < max_retries:
                     wait_time = exponential_backoff(attempt)
                     time.sleep(wait_time)
@@ -344,7 +344,7 @@ class AsyncSideShiftClient(BaseClient):
 
                 return self._handle_response(response)
 
-            except SideShiftRateLimitError as e:
+            except SideShiftRateLimitError:
                 if attempt < max_retries:
                     wait_time = exponential_backoff(attempt)
                     await asyncio.sleep(wait_time)
