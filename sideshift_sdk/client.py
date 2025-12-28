@@ -18,6 +18,7 @@ from sideshift_sdk.constants import (
     HEADER_CONTENT_TYPE,
     HEADER_REQUEST_ID,
     HEADER_SIDESHIFT_SECRET,
+    HEADER_USER_AGENT,
     HEADER_USER_IP,
 )
 from sideshift_sdk.types import HeadersDict, JsonDict
