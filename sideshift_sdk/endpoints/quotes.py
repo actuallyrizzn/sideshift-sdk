@@ -62,6 +62,11 @@ def request_quote(
     if deposit_amount is None and settle_amount is None:
         raise ValueError("Either deposit_amount or settle_amount must be provided")
 
+    # Normalize and validate affiliate_id
+    final_affiliate_id = normalize_affiliate_id(affiliate_id) or normalize_affiliate_id(client.affiliate_id)
+    if not final_affiliate_id:
+        raise ValueError("affiliate_id is required. Provide it as a parameter or set it on the client.")
+
     request_data = QuoteRequest(
         deposit_coin=deposit_coin,
         deposit_network=deposit_network,
@@ -69,7 +74,7 @@ def request_quote(
         settle_network=settle_network,
         deposit_amount=deposit_amount,
         settle_amount=settle_amount,
-        affiliate_id=affiliate_id or client.affiliate_id or "",
+        affiliate_id=final_affiliate_id,
         commission_rate=commission_rate,
     )
 
@@ -142,6 +147,11 @@ async def request_quote_async(
     if deposit_amount is None and settle_amount is None:
         raise ValueError("Either deposit_amount or settle_amount must be provided")
 
+    # Normalize and validate affiliate_id
+    final_affiliate_id = normalize_affiliate_id(affiliate_id) or normalize_affiliate_id(client.affiliate_id)
+    if not final_affiliate_id:
+        raise ValueError("affiliate_id is required. Provide it as a parameter or set it on the client.")
+
     request_data = QuoteRequest(
         deposit_coin=deposit_coin,
         deposit_network=deposit_network,
@@ -149,7 +159,7 @@ async def request_quote_async(
         settle_network=settle_network,
         deposit_amount=deposit_amount,
         settle_amount=settle_amount,
-        affiliate_id=affiliate_id or client.affiliate_id or "",
+        affiliate_id=final_affiliate_id,
         commission_rate=commission_rate,
     )
 

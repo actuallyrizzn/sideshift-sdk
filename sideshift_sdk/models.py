@@ -76,7 +76,7 @@ class QuoteRequest(BaseModel):
     settle_network: str | None = Field(None, alias="settleNetwork", min_length=1)
     deposit_amount: str | None = Field(None, alias="depositAmount", min_length=1)
     settle_amount: str | None = Field(None, alias="settleAmount", min_length=1)
-    affiliate_id: str = Field(..., alias="affiliateId", min_length=1)
+    affiliate_id: str | None = Field(None, alias="affiliateId", min_length=1)
     commission_rate: str | None = Field(None, alias="commissionRate", min_length=1)
 
     @field_validator("deposit_amount", "settle_amount", "commission_rate", mode="before")

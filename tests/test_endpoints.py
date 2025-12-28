@@ -92,6 +92,19 @@ def test_request_quote_missing_amounts():
         )
 
 
+def test_request_quote_missing_affiliate_id():
+    """Test request_quote with missing affiliate_id raises ValueError."""
+    client = SideShiftClient(secret="test-secret")  # No affiliate_id
+
+    with pytest.raises(ValueError, match="affiliate_id is required"):
+        quotes.request_quote(
+            client,
+            deposit_coin="btc",
+            settle_coin="eth",
+            deposit_amount="0.1",
+        )
+
+
 def test_create_fixed_shift():
     """Test create_fixed_shift endpoint."""
     client = SideShiftClient(secret="test-secret", affiliate_id="test-affiliate")
