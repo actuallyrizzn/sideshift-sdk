@@ -397,6 +397,7 @@ class AsyncSideShiftClient(BaseClient):
                     params=params,
                     json=json_data,
                     headers=request_headers,
+                    timeout=self.timeout,
                 )
 
                 return self._handle_response(response)
