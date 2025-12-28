@@ -357,8 +357,9 @@ def test_client_network_error_connection():
         client.get("/test")
 
     assert "Network error" in exc_info.value.message
-    assert exc_info.value.original_error is not None
-    assert isinstance(exc_info.value.original_error, requests.exceptions.ConnectionError)
+    # Check that exception chaining is preserved
+    assert exc_info.value.__cause__ is not None
+    assert isinstance(exc_info.value.__cause__, requests.exceptions.ConnectionError)
 
 
 def test_client_network_error_timeout():
@@ -373,7 +374,8 @@ def test_client_network_error_timeout():
 
     assert "timeout" in exc_info.value.message.lower()
     assert "5 seconds" in exc_info.value.message
-    assert exc_info.value.original_error is not None
+    # Check that exception chaining is preserved
+    assert exc_info.value.__cause__ is not None
 
 
 @pytest.mark.asyncio
@@ -390,4 +392,5 @@ async def test_async_client_network_error():
         await client._request("GET", "/test")
 
     assert "Network error" in exc_info.value.message
-    assert exc_info.value.original_error is not None
+    # Check that exception chaining is preserved
+    assert exc_info.value.__cause__ is not None

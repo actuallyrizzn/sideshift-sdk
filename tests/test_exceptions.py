@@ -82,9 +82,12 @@ def test_rate_limit_error():
 
 def test_network_error():
     """Test network error."""
-    original = ConnectionError("Connection refused")
-    exc = SideShiftNetworkError("Network error occurred", original_error=original)
+    exc = SideShiftNetworkError("Network error occurred")
     assert exc.message == "Network error occurred"
     assert exc.status_code is None
     assert exc.response_data is None
-    assert exc.original_error == original
+
+    # Test default message
+    exc2 = SideShiftNetworkError()
+    assert exc2.message == "Network error"
+    assert exc2.status_code is None
