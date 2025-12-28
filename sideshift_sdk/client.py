@@ -297,8 +297,8 @@ class BaseClient:
                 status_code=400,
                 response_data={"request_id": request_id} if request_id else None,
                 request_id=request_id,
-                method=method,
-                endpoint=endpoint,
+                method=method or "UNKNOWN",
+                endpoint=endpoint or "/",
             )
 
         # Attempt JSON serialization to catch serialization errors early
@@ -397,8 +397,8 @@ class BaseClient:
                 status_code=response.status_code if hasattr(response, "status_code") else 200,
                 response_data={"request_id": request_id, "content_type": content_type} if request_id else {"content_type": content_type},
                 request_id=request_id,
-                method=method,
-                endpoint=endpoint,
+                method=method or "UNKNOWN",
+                endpoint=endpoint or "/",
             )
 
     def _handle_response(
@@ -532,8 +532,8 @@ class BaseClient:
                     status_code,
                     add_request_id_to_error_data({"raw_response": error_text}),
                     request_id=request_id,
-                    method=method,
-                    endpoint=endpoint,
+                    method=method or "UNKNOWN",
+                    endpoint=endpoint or "/",
                 )
 
         # Handle rate limiting
@@ -618,13 +618,14 @@ class BaseClient:
                 endpoint=endpoint,
             )
         else:
+            error_message = error_data.get("message") or f"API error: {status_code}"
             raise SideShiftAPIError(
-                error_data.get("message", f"API error: {status_code}"),
+                error_message,
                 status_code,
                 add_request_id_to_error_data(error_data),
                 request_id=request_id,
-                method=method,
-                endpoint=endpoint,
+                method=method or "UNKNOWN",
+                endpoint=endpoint or "/",
             )
 
 
