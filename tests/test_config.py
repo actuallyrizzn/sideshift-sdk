@@ -196,3 +196,46 @@ async def test_async_client_uses_config_pooling():
         await client._get_client()
         assert client._client is not None
 
+
+def test_get_verify_ssl_from_provided():
+    """Test getting SSL verification from provided value."""
+    assert SDKConfig.get_verify_ssl(True) is True
+    assert SDKConfig.get_verify_ssl(False) is False
+
+
+def test_get_verify_ssl_from_env():
+    """Test getting SSL verification from environment variable."""
+    with patch.dict(os.environ, {"SIDESHIFT_VERIFY_SSL": "false"}):
+        assert SDKConfig.get_verify_ssl() is False
+    with patch.dict(os.environ, {"SIDESHIFT_VERIFY_SSL": "true"}):
+        assert SDKConfig.get_verify_ssl() is True
+    with patch.dict(os.environ, {"SIDESHIFT_VERIFY_SSL": "1"}):
+        assert SDKConfig.get_verify_ssl() is True
+
+
+def test_get_verify_ssl_default():
+    """Test getting default SSL verification when nothing provided."""
+    with patch.dict(os.environ, {}, clear=True):
+        os.environ.pop("SIDESHIFT_VERIFY_SSL", None)
+        assert SDKConfig.get_verify_ssl() is True  # Default is True for security
+
+
+def test_client_uses_config_verify_ssl():
+    """Test that client uses configurable SSL verification."""
+    client = SideShiftClient(secret="test-secret", verify_ssl=False)
+    assert client.verify_ssl is False
+
+
+def test_client_uses_env_verify_ssl():
+    """Test that client uses SSL verification from environment variable."""
+    with patch.dict(os.environ, {"SIDESHIFT_VERIFY_SSL": "false"}):
+        client = SideShiftClient(secret="test-secret")
+        assert client.verify_ssl is False
+
+
+@pytest.mark.asyncio
+async def test_async_client_uses_config_verify_ssl():
+    """Test that async client uses configurable SSL verification."""
+    async with AsyncSideShiftClient(secret="test-secret", verify_ssl=False) as client:
+        assert client.verify_ssl is False
+

@@ -259,6 +259,7 @@ class SideShiftClient(BaseClient):
         timeout: int | None = None,
         max_connections: int | None = None,
         max_keepalive_connections: int | None = None,
+        verify_ssl: bool | None = None,
         enable_logging: bool = False,
         log_level: int | str | None = None,
     ):
@@ -272,6 +273,7 @@ class SideShiftClient(BaseClient):
             timeout: Request timeout in seconds (can also be set via SIDESHIFT_TIMEOUT env var)
             max_connections: Maximum number of connections in pool (can also be set via SIDESHIFT_MAX_CONNECTIONS env var)
             max_keepalive_connections: Maximum number of keepalive connections (can also be set via SIDESHIFT_MAX_KEEPALIVE_CONNECTIONS env var)
+            verify_ssl: Whether to verify SSL certificates (can also be set via SIDESHIFT_VERIFY_SSL env var, default: True)
             enable_logging: Whether to enable logging (default: False)
             log_level: Logging level if enable_logging is True (default: logging.INFO)
         """
@@ -279,6 +281,7 @@ class SideShiftClient(BaseClient):
         self.timeout = SDKConfig.get_timeout(timeout)
         self.max_connections = SDKConfig.get_max_connections(max_connections)
         self.max_keepalive_connections = SDKConfig.get_max_keepalive_connections(max_keepalive_connections)
+        self.verify_ssl = SDKConfig.get_verify_ssl(verify_ssl)
         
         # Configure connection pooling
         self._session = requests.Session()
@@ -350,6 +353,7 @@ class SideShiftClient(BaseClient):
                     json=json_data,
                     headers=request_headers,
                     timeout=self.timeout,
+                    verify=self.verify_ssl,
                 )
 
                 if self._enable_logging:
@@ -539,6 +543,7 @@ class AsyncSideShiftClient(BaseClient):
         timeout: int | None = None,
         max_connections: int | None = None,
         max_keepalive_connections: int | None = None,
+        verify_ssl: bool | None = None,
         enable_logging: bool = False,
         log_level: int | str | None = None,
     ):
@@ -552,6 +557,7 @@ class AsyncSideShiftClient(BaseClient):
             timeout: Request timeout in seconds (can also be set via SIDESHIFT_TIMEOUT env var)
             max_connections: Maximum number of connections in pool (can also be set via SIDESHIFT_MAX_CONNECTIONS env var)
             max_keepalive_connections: Maximum number of keepalive connections (can also be set via SIDESHIFT_MAX_KEEPALIVE_CONNECTIONS env var)
+            verify_ssl: Whether to verify SSL certificates (can also be set via SIDESHIFT_VERIFY_SSL env var, default: True)
             enable_logging: Whether to enable logging (default: False)
             log_level: Logging level if enable_logging is True (default: logging.INFO)
         """
@@ -559,6 +565,7 @@ class AsyncSideShiftClient(BaseClient):
         self.timeout = SDKConfig.get_timeout(timeout)
         self.max_connections = SDKConfig.get_max_connections(max_connections)
         self.max_keepalive_connections = SDKConfig.get_max_keepalive_connections(max_keepalive_connections)
+        self.verify_ssl = SDKConfig.get_verify_ssl(verify_ssl)
         self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -572,7 +579,11 @@ class AsyncSideShiftClient(BaseClient):
                 max_connections=self.max_connections,
                 max_keepalive_connections=self.max_keepalive_connections,
             )
-            self._client = httpx.AsyncClient(timeout=self.timeout, limits=limits)
+            self._client = httpx.AsyncClient(
+                timeout=self.timeout,
+                limits=limits,
+                verify=self.verify_ssl,
+            )
         return self._client
 
     async def _request(

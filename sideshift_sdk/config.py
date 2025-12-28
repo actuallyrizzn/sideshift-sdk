@@ -19,6 +19,7 @@ class SDKConfig:
     DEFAULT_BASE_URL = BASE_URL
     DEFAULT_MAX_CONNECTIONS = 10
     DEFAULT_MAX_KEEPALIVE_CONNECTIONS = 5
+    DEFAULT_VERIFY_SSL = True
 
     @staticmethod
     def get_timeout(provided: Optional[int] = None) -> int:
@@ -116,4 +117,22 @@ class SDKConfig:
             except ValueError:
                 pass
         return SDKConfig.DEFAULT_MAX_KEEPALIVE_CONNECTIONS
+
+    @staticmethod
+    def get_verify_ssl(provided: Optional[bool] = None) -> bool:
+        """Get SSL verification value from provided value or environment variable.
+
+        Args:
+            provided: SSL verification value provided directly (takes precedence)
+
+        Returns:
+            Whether to verify SSL certificates (True by default for security)
+        """
+        if provided is not None:
+            return provided
+        env_verify = os.getenv("SIDESHIFT_VERIFY_SSL")
+        if env_verify:
+            # Accept "true", "1", "yes" as True, everything else as False
+            return env_verify.lower() in ("true", "1", "yes")
+        return SDKConfig.DEFAULT_VERIFY_SSL
 
