@@ -318,6 +318,59 @@ class BaseClient:
                 endpoint=endpoint,
             ) from e
 
+    def _validate_content_type(
+        self,
+        response: requests.Response | httpx.Response,
+        method: str,
+        endpoint: str,
+        request_id: str | None = None,
+    ) -> None:
+        """Validate that response Content-Type is application/json.
+
+        Args:
+            response: HTTP response object
+            method: HTTP method for error context
+            endpoint: API endpoint for error context
+            request_id: Request ID for correlation tracking
+
+        Raises:
+            SideShiftAPIError: If Content-Type is not application/json
+        """
+        if not hasattr(response, "headers"):
+            return  # Can't validate without headers
+        
+        content_type = response.headers.get("Content-Type") or response.headers.get("content-type")
+        
+        if not content_type:
+            # Missing Content-Type header - log warning but don't fail
+            # Some APIs may not include it, and we can still parse JSON
+            if hasattr(self, "_enable_logging") and self._enable_logging:
+                self._logger.warning(
+                    f"Response missing Content-Type header for {method} {endpoint} [Request-ID: {request_id}]"
+                )
+            return
+        
+        # Normalize Content-Type (handle charset, etc.)
+        # e.g., "application/json; charset=utf-8" -> "application/json"
+        content_type_base = content_type.split(";")[0].strip().lower()
+        expected_content_type = CONTENT_TYPE_JSON.lower()
+        
+        if content_type_base != expected_content_type:
+            error_msg = (
+                f"Unexpected Content-Type: {content_type}. "
+                f"Expected {CONTENT_TYPE_JSON} for JSON responses."
+            )
+            if hasattr(self, "_enable_logging") and self._enable_logging:
+                self._logger.error(f"{error_msg} [Request-ID: {request_id}]")
+            raise SideShiftAPIError(
+                error_msg,
+                status_code=response.status_code if hasattr(response, "status_code") else 200,
+                response_data={"request_id": request_id, "content_type": content_type} if request_id else {"content_type": content_type},
+                request_id=request_id,
+                method=method,
+                endpoint=endpoint,
+            )
+
     def _handle_response(
         self,
         response: requests.Response | httpx.Response,
@@ -366,6 +419,9 @@ class BaseClient:
             return {}
 
         if status_code == 200 or status_code == 201:
+            # Validate Content-Type for JSON responses
+            self._validate_content_type(response, method or "UNKNOWN", endpoint or "/", request_id)
+            
             # Check response size if limit is configured
             if max_response_size is not None:
                 content_length = None

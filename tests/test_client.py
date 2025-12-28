@@ -542,3 +542,93 @@ async def test_async_client_validate_request_body_in_request():
     # Ensure client is properly closed if it was created
     if client._client is not None:
         await client.close()
+
+
+def test_client_validate_content_type_valid():
+    """Test that valid Content-Type passes validation."""
+    client = SideShiftClient(secret="test-secret")
+    
+    # Valid Content-Type: application/json
+    mock_response = Mock()
+    mock_response.headers = {"Content-Type": "application/json"}
+    mock_response.status_code = 200
+    client._validate_content_type(mock_response, "GET", "/test", "test-request-id")
+    
+    # Valid Content-Type with charset
+    mock_response.headers = {"Content-Type": "application/json; charset=utf-8"}
+    client._validate_content_type(mock_response, "GET", "/test", "test-request-id")
+    
+    # Valid Content-Type with different case
+    mock_response.headers = {"content-type": "application/json"}
+    client._validate_content_type(mock_response, "GET", "/test", "test-request-id")
+
+
+def test_client_validate_content_type_invalid():
+    """Test that invalid Content-Type raises SideShiftAPIError."""
+    client = SideShiftClient(secret="test-secret")
+    
+    # Invalid Content-Type: text/html
+    mock_response = Mock()
+    mock_response.headers = {"Content-Type": "text/html"}
+    mock_response.status_code = 200
+    
+    with pytest.raises(SideShiftAPIError) as exc_info:
+        client._validate_content_type(mock_response, "GET", "/test", "test-request-id")
+    assert exc_info.value.status_code == 200
+    assert "Unexpected Content-Type" in exc_info.value.message
+    assert "text/html" in exc_info.value.message
+    assert exc_info.value.response_data["content_type"] == "text/html"
+    
+    # Invalid Content-Type: application/xml
+    mock_response.headers = {"Content-Type": "application/xml"}
+    with pytest.raises(SideShiftAPIError) as exc_info:
+        client._validate_content_type(mock_response, "GET", "/test", "test-request-id")
+    assert "application/xml" in exc_info.value.message
+
+
+def test_client_validate_content_type_missing():
+    """Test that missing Content-Type logs warning but doesn't raise error."""
+    client = SideShiftClient(secret="test-secret", enable_logging=True)
+    
+    # Missing Content-Type header
+    mock_response = Mock()
+    mock_response.headers = {}
+    mock_response.status_code = 200
+    
+    # Should not raise, but may log warning
+    client._validate_content_type(mock_response, "GET", "/test", "test-request-id")
+    
+    # Response without headers attribute
+    mock_response_no_headers = Mock()
+    del mock_response_no_headers.headers
+    mock_response_no_headers.status_code = 200
+    
+    # Should not raise
+    client._validate_content_type(mock_response_no_headers, "GET", "/test", "test-request-id")
+
+
+def test_client_content_type_validation_in_response():
+    """Test that Content-Type validation is called in _handle_response for successful responses."""
+    client = SideShiftClient(secret="test-secret")
+    
+    # Valid Content-Type - should pass
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.headers = {"Content-Type": "application/json"}
+    mock_response.json.return_value = {"data": "test"}
+    mock_response.text = '{"data": "test"}'
+    mock_response.content = b'{"data": "test"}'
+    
+    result = client._handle_response(mock_response, method="GET", endpoint="/test")
+    assert result == {"data": "test"}
+    
+    # Invalid Content-Type - should raise error
+    mock_response_invalid = Mock()
+    mock_response_invalid.status_code = 200
+    mock_response_invalid.headers = {"Content-Type": "text/html"}
+    mock_response_invalid.text = "<html>test</html>"
+    mock_response_invalid.content = b"<html>test</html>"
+    
+    with pytest.raises(SideShiftAPIError) as exc_info:
+        client._handle_response(mock_response_invalid, method="GET", endpoint="/test")
+    assert "Unexpected Content-Type" in exc_info.value.message
