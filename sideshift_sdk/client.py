@@ -112,6 +112,19 @@ class BaseClient:
         self._in_flight_requests: dict[str, Any] = {}  # request_key -> future/result
         self._request_cache: dict[str, tuple[JsonDict, float]] = {}  # request_key -> (response, expiry_time)
         self._deduplication_lock: threading.Lock | asyncio.Lock | None = None
+        
+        # Request metrics tracking
+        self._metrics_enabled: bool = False
+        self._metrics: dict[str, Any] = {
+            "total_requests": 0,
+            "successful_requests": 0,
+            "failed_requests": 0,
+            "rate_limit_errors": 0,
+            "network_errors": 0,
+            "total_response_time": 0.0,
+            "response_times": [],  # For calculating percentiles
+        }
+        self._metrics_lock: threading.Lock | asyncio.Lock | None = None
 
     def set_secret(self, secret: str | None) -> None:
         """Update the secret key for authentication.
@@ -964,6 +977,92 @@ class BaseClient:
         for key in expired_keys:
             del self._request_cache[key]
 
+    def enable_metrics(self, enabled: bool = True) -> None:
+        """Enable or disable request metrics tracking.
+
+        Args:
+            enabled: Whether to enable metrics tracking (default: True)
+        """
+        self._metrics_enabled = enabled
+        if enabled and self._metrics_lock is None:
+            # Initialize lock based on client type
+            if hasattr(self, "_session"):  # Sync client
+                self._metrics_lock = threading.Lock()
+            elif hasattr(self, "_client"):  # Async client
+                self._metrics_lock = asyncio.Lock()
+
+    def get_metrics(self) -> dict[str, Any]:
+        """Get current request metrics.
+
+        Returns:
+            Dictionary with metrics:
+            - total_requests: Total number of requests made
+            - successful_requests: Number of successful requests
+            - failed_requests: Number of failed requests
+            - rate_limit_errors: Number of rate limit errors
+            - network_errors: Number of network errors
+            - average_response_time: Average response time in seconds
+            - min_response_time: Minimum response time in seconds
+            - max_response_time: Maximum response time in seconds
+        """
+        if not self._metrics_enabled:
+            return {}
+        
+        metrics = self._metrics.copy()
+        total = metrics["total_requests"]
+        if total > 0:
+            metrics["average_response_time"] = metrics["total_response_time"] / total
+            if metrics["response_times"]:
+                metrics["min_response_time"] = min(metrics["response_times"])
+                metrics["max_response_time"] = max(metrics["response_times"])
+            else:
+                metrics["min_response_time"] = 0.0
+                metrics["max_response_time"] = 0.0
+        else:
+            metrics["average_response_time"] = 0.0
+            metrics["min_response_time"] = 0.0
+            metrics["max_response_time"] = 0.0
+        
+        # Remove internal list, return summary
+        metrics.pop("response_times", None)
+        return metrics
+
+    def reset_metrics(self) -> None:
+        """Reset all metrics counters."""
+        if self._metrics_lock:
+            if isinstance(self._metrics_lock, threading.Lock):
+                with self._metrics_lock:
+                    self._metrics = {
+                        "total_requests": 0,
+                        "successful_requests": 0,
+                        "failed_requests": 0,
+                        "rate_limit_errors": 0,
+                        "network_errors": 0,
+                        "total_response_time": 0.0,
+                        "response_times": [],
+                    }
+            else:
+                # For async, we'll need to handle this differently
+                self._metrics = {
+                    "total_requests": 0,
+                    "successful_requests": 0,
+                    "failed_requests": 0,
+                    "rate_limit_errors": 0,
+                    "network_errors": 0,
+                    "total_response_time": 0.0,
+                    "response_times": [],
+                }
+        else:
+            self._metrics = {
+                "total_requests": 0,
+                "successful_requests": 0,
+                "failed_requests": 0,
+                "rate_limit_errors": 0,
+                "network_errors": 0,
+                "total_response_time": 0.0,
+                "response_times": [],
+            }
+
 
 class SideShiftClient(BaseClient):
     """Synchronous client for SideShift API."""
@@ -1029,6 +1128,10 @@ class SideShiftClient(BaseClient):
         )
         self._session.mount("http://", adapter)
         self._session.mount("https://", adapter)
+        
+        # Initialize metrics lock for sync client
+        if self._metrics_lock is None:
+            self._metrics_lock = threading.Lock()
 
     def _request(
         self,
@@ -1063,6 +1166,12 @@ class SideShiftClient(BaseClient):
             method, endpoint, params, json_data, headers, require_auth, require_user_ip, max_retries, timeout
         )
 
+        # Track metrics
+        request_start_time = time.time() if self._metrics_enabled else None
+        if self._metrics_enabled:
+            with self._metrics_lock:  # type: ignore[union-attr]
+                self._metrics["total_requests"] += 1
+
         for attempt in range(retry_count + 1):
             try:
                 self._log_request_start(method, endpoint, params, request_id, attempt, retry_count)
@@ -1093,9 +1202,26 @@ class SideShiftClient(BaseClient):
                 )
 
                 self._call_response_hooks(method, endpoint, response_data)
+                
+                # Track successful request metrics
+                if self._metrics_enabled and request_start_time:
+                    response_time = time.time() - request_start_time
+                    with self._metrics_lock:  # type: ignore[union-attr]
+                        self._metrics["successful_requests"] += 1
+                        self._metrics["total_response_time"] += response_time
+                        self._metrics["response_times"].append(response_time)
+                        # Keep only last 1000 response times to avoid memory issues
+                        if len(self._metrics["response_times"]) > 1000:
+                            self._metrics["response_times"] = self._metrics["response_times"][-1000:]
+                
                 return response_data
 
             except SideShiftRateLimitError as rate_limit_error:
+                # Track rate limit error
+                if self._metrics_enabled:
+                    with self._metrics_lock:  # type: ignore[union-attr]
+                        self._metrics["rate_limit_errors"] += 1
+                        self._metrics["failed_requests"] += 1
                 if self._enable_logging:
                     self._logger.warning(
                         f"Rate limit exceeded for {method} {endpoint} (attempt {attempt + 1}/{retry_count + 1}) [Request-ID: {request_id}]"
@@ -1120,6 +1246,11 @@ class SideShiftClient(BaseClient):
                     endpoint=endpoint,
                 )
                 self._call_error_hooks(network_error, method, endpoint)
+                # Track network error
+                if self._metrics_enabled:
+                    with self._metrics_lock:  # type: ignore[union-attr]
+                        self._metrics["network_errors"] += 1
+                        self._metrics["failed_requests"] += 1
                 raise network_error from e
             except requests.exceptions.RequestException as e:
                 # Other requests exceptions (DNS, SSL, etc.)
@@ -1133,10 +1264,19 @@ class SideShiftClient(BaseClient):
                     endpoint=endpoint,
                 )
                 self._call_error_hooks(network_error, method, endpoint)
+                # Track network error
+                if self._metrics_enabled:
+                    with self._metrics_lock:  # type: ignore[union-attr]
+                        self._metrics["network_errors"] += 1
+                        self._metrics["failed_requests"] += 1
                 raise network_error from e
             except SideShiftException as e:
                 # Call error hooks for SDK exceptions
                 self._call_error_hooks(e, method, endpoint)
+                # Track failed request (non-network, non-rate-limit errors)
+                if self._metrics_enabled and not isinstance(e, (SideShiftRateLimitError, SideShiftNetworkError)):
+                    with self._metrics_lock:  # type: ignore[union-attr]
+                        self._metrics["failed_requests"] += 1
                 raise
 
     def get(
@@ -1467,6 +1607,12 @@ class AsyncSideShiftClient(BaseClient):
 
         client = await self._get_client()
         
+        # Track metrics
+        request_start_time = time.time() if self._metrics_enabled else None
+        if self._metrics_enabled:
+            async with self._metrics_lock:  # type: ignore[union-attr]
+                self._metrics["total_requests"] += 1
+        
         # Execute request with deduplication handling
         try:
             for attempt in range(retry_count + 1):
@@ -1511,9 +1657,25 @@ class AsyncSideShiftClient(BaseClient):
                                 if not future_to_complete.done():
                                     future_to_complete.set_result(response_data)
                     
+                    # Track successful request metrics
+                    if self._metrics_enabled and request_start_time:
+                        response_time = time.time() - request_start_time
+                        async with self._metrics_lock:  # type: ignore[union-attr]
+                            self._metrics["successful_requests"] += 1
+                            self._metrics["total_response_time"] += response_time
+                            self._metrics["response_times"].append(response_time)
+                            # Keep only last 1000 response times to avoid memory issues
+                            if len(self._metrics["response_times"]) > 1000:
+                                self._metrics["response_times"] = self._metrics["response_times"][-1000:]
+                    
                     return response_data
 
                 except SideShiftRateLimitError as rate_limit_error:
+                    # Track rate limit error
+                    if self._metrics_enabled:
+                        async with self._metrics_lock:  # type: ignore[union-attr]
+                            self._metrics["rate_limit_errors"] += 1
+                            self._metrics["failed_requests"] += 1
                     if self._enable_logging:
                         self._logger.warning(
                         f"Rate limit exceeded for {method} {endpoint} (attempt {attempt + 1}/{retry_count + 1}) [Request-ID: {request_id}]"
@@ -1554,10 +1716,19 @@ class AsyncSideShiftClient(BaseClient):
                         endpoint=endpoint,
                     )
                     await self._call_error_hooks_async(network_error, method, endpoint)
+                    # Track network error
+                    if self._metrics_enabled:
+                        async with self._metrics_lock:  # type: ignore[union-attr]
+                            self._metrics["network_errors"] += 1
+                            self._metrics["failed_requests"] += 1
                     raise network_error from e
                 except SideShiftException as e:
                     # Call error hooks for SDK exceptions
                     await self._call_error_hooks_async(e, method, endpoint)
+                    # Track failed request (non-network, non-rate-limit errors)
+                    if self._metrics_enabled and not isinstance(e, (SideShiftRateLimitError, SideShiftNetworkError)):
+                        async with self._metrics_lock:  # type: ignore[union-attr]
+                            self._metrics["failed_requests"] += 1
                     raise
         except Exception as e:
             # Handle any other exceptions and clean up deduplication
