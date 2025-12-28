@@ -9,6 +9,7 @@ from sideshift_sdk.utils import (
     build_coin_network,
     exponential_backoff,
     handle_rate_limit,
+    normalize_affiliate_id,
     validate_non_empty_string,
     validate_positive_amount,
 )
@@ -108,3 +109,17 @@ def test_validate_positive_amount():
 
     with pytest.raises(TypeError, match="must be a string"):
         validate_positive_amount(123, "amount")
+
+
+def test_normalize_affiliate_id():
+    """Test normalize_affiliate_id function."""
+    # Valid cases - should return as-is
+    assert normalize_affiliate_id("test-id") == "test-id"
+    assert normalize_affiliate_id("  test-id  ") == "  test-id  "  # Whitespace preserved
+
+    # Empty strings should return None
+    assert normalize_affiliate_id("") is None
+    assert normalize_affiliate_id("   ") is None  # Whitespace-only treated as empty
+
+    # None should return None
+    assert normalize_affiliate_id(None) is None

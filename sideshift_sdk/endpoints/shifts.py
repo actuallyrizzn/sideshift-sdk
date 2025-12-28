@@ -11,7 +11,7 @@ from sideshift_sdk.models import (
     Shift,
     VariableShiftRequest,
 )
-from sideshift_sdk.utils import validate_non_empty_string
+from sideshift_sdk.utils import normalize_affiliate_id, validate_non_empty_string
 
 if TYPE_CHECKING:
     from sideshift_sdk.client import AsyncSideShiftClient, SideShiftClient
@@ -164,7 +164,7 @@ def create_fixed_shift(
     request_data = FixedShiftRequest(
         settle_address=settle_address,
         settle_memo=settle_memo,
-        affiliate_id=affiliate_id or client.affiliate_id or "",
+        affiliate_id=normalize_affiliate_id(affiliate_id) or normalize_affiliate_id(client.affiliate_id) or "",
         quote_id=quote_id,
         refund_address=refund_address,
         refund_memo=refund_memo,
@@ -219,7 +219,7 @@ async def create_fixed_shift_async(
     request_data = FixedShiftRequest(
         settle_address=settle_address,
         settle_memo=settle_memo,
-        affiliate_id=affiliate_id or client.affiliate_id or "",
+        affiliate_id=normalize_affiliate_id(affiliate_id) or normalize_affiliate_id(client.affiliate_id) or "",
         quote_id=quote_id,
         refund_address=refund_address,
         refund_memo=refund_memo,
@@ -292,7 +292,7 @@ def create_variable_shift(
         settle_network=settle_network,
         settle_address=settle_address,
         settle_memo=settle_memo,
-        affiliate_id=affiliate_id or client.affiliate_id or "",
+        affiliate_id=normalize_affiliate_id(affiliate_id) or normalize_affiliate_id(client.affiliate_id) or "",
         refund_address=refund_address,
         refund_memo=refund_memo,
         external_id=external_id,
@@ -357,7 +357,7 @@ async def create_variable_shift_async(
         settle_network=settle_network,
         settle_address=settle_address,
         settle_memo=settle_memo,
-        affiliate_id=affiliate_id or client.affiliate_id or "",
+        affiliate_id=normalize_affiliate_id(affiliate_id) or normalize_affiliate_id(client.affiliate_id) or "",
         refund_address=refund_address,
         refund_memo=refund_memo,
         external_id=external_id,

@@ -47,6 +47,22 @@ def validate_positive_amount(amount: str | None, param_name: str) -> None:
         raise
 
 
+def normalize_affiliate_id(affiliate_id: str | None) -> str | None:
+    """Normalize affiliate_id: treat empty strings as None.
+
+    Args:
+        affiliate_id: Affiliate ID string (may be empty)
+
+    Returns:
+        None if affiliate_id is None or empty string, otherwise the string
+    """
+    if affiliate_id is None:
+        return None
+    if isinstance(affiliate_id, str) and not affiliate_id.strip():
+        return None
+    return affiliate_id
+
+
 def handle_rate_limit(retry_after: int | None = None) -> None:
     """Handle rate limit by waiting.
 

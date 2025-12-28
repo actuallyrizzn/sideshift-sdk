@@ -4,7 +4,11 @@ from typing import TYPE_CHECKING
 
 from sideshift_sdk.constants import HEADER_USER_IP
 from sideshift_sdk.models import Quote, QuoteRequest
-from sideshift_sdk.utils import validate_non_empty_string, validate_positive_amount
+from sideshift_sdk.utils import (
+    normalize_affiliate_id,
+    validate_non_empty_string,
+    validate_positive_amount,
+)
 
 if TYPE_CHECKING:
     from sideshift_sdk.client import AsyncSideShiftClient, SideShiftClient

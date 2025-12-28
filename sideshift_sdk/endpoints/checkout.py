@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from sideshift_sdk.constants import HEADER_USER_IP
 from sideshift_sdk.models import Checkout, CheckoutRequest
+from sideshift_sdk.utils import normalize_affiliate_id
 
 if TYPE_CHECKING:
     from sideshift_sdk.client import AsyncSideShiftClient, SideShiftClient
@@ -86,7 +87,7 @@ def create_checkout(
         settle_amount=settle_amount,
         settle_address=settle_address,
         settle_memo=settle_memo,
-        affiliate_id=affiliate_id or client.affiliate_id or "",
+        affiliate_id=normalize_affiliate_id(affiliate_id) or normalize_affiliate_id(client.affiliate_id) or "",
         success_url=success_url,
         cancel_url=cancel_url,
     )
@@ -145,7 +146,7 @@ async def create_checkout_async(
         settle_amount=settle_amount,
         settle_address=settle_address,
         settle_memo=settle_memo,
-        affiliate_id=affiliate_id or client.affiliate_id or "",
+        affiliate_id=normalize_affiliate_id(affiliate_id) or normalize_affiliate_id(client.affiliate_id) or "",
         success_url=success_url,
         cancel_url=cancel_url,
     )

@@ -3,7 +3,7 @@
 from typing import TYPE_CHECKING
 
 from sideshift_sdk.models import PairInfo
-from sideshift_sdk.utils import validate_non_empty_string
+from sideshift_sdk.utils import normalize_affiliate_id, validate_non_empty_string
 
 if TYPE_CHECKING:
     from sideshift_sdk.client import AsyncSideShiftClient, SideShiftClient
@@ -36,7 +36,7 @@ def get_pair(
         >>> print(f"Rate: {pair.rate}, Min: {pair.min}, Max: {pair.max}")
     """
     params: dict[str, str | float] = {
-        "affiliateId": affiliate_id or client.affiliate_id or "",
+        "affiliateId": normalize_affiliate_id(affiliate_id) or normalize_affiliate_id(client.affiliate_id) or "",
     }
 
     if amount is not None:
@@ -75,7 +75,7 @@ async def get_pair_async(
     validate_non_empty_string(to_coin, "to_coin")
     
     params: dict[str, str | float] = {
-        "affiliateId": affiliate_id or client.affiliate_id or "",
+        "affiliateId": normalize_affiliate_id(affiliate_id) or normalize_affiliate_id(client.affiliate_id) or "",
     }
 
     if amount is not None:
@@ -113,7 +113,7 @@ def get_pairs(
     """
     params: dict[str, str] = {
         "pairs": ",".join(pairs),
-        "affiliateId": affiliate_id or client.affiliate_id or "",
+        "affiliateId": normalize_affiliate_id(affiliate_id) or normalize_affiliate_id(client.affiliate_id) or "",
     }
 
     if commission_rate:
@@ -142,7 +142,7 @@ async def get_pairs_async(
     """
     params: dict[str, str] = {
         "pairs": ",".join(pairs),
-        "affiliateId": affiliate_id or client.affiliate_id or "",
+        "affiliateId": normalize_affiliate_id(affiliate_id) or normalize_affiliate_id(client.affiliate_id) or "",
     }
 
     if commission_rate:
