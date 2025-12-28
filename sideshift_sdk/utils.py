@@ -39,7 +39,7 @@ def build_coin_network(coin: str, network: str | None = None) -> str:
     Returns:
         Coin-network identifier (e.g., 'btc-mainnet', 'eth-ethereum')
     """
-    if network:
-        return f"{coin}-{network}"
-    return coin
+    if network is None:
+        return coin
+    return f"{coin}-{network}"
 
