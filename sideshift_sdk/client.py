@@ -110,7 +110,7 @@ class BaseClient:
                 elif hasattr(response, "content"):
                     try:
                         error_text = response.content.decode("utf-8")[:200]
-                    except Exception:
+                    except UnicodeDecodeError:
                         pass
                 raise SideShiftAPIError(
                     f"Failed to parse JSON response: {str(e)}. Response: {error_text}",
@@ -130,14 +130,14 @@ class BaseClient:
         # Handle other errors
         try:
             error_data = response.json()
-        except Exception:
+        except (ValueError, TypeError):
             # Handle both requests and httpx response types
             if hasattr(response, "text"):
                 error_text = response.text
             elif hasattr(response, "content"):
                 try:
                     error_text = response.content.decode("utf-8")
-                except Exception:
+                except UnicodeDecodeError:
                     error_text = "Unknown error"
             else:
                 error_text = "Unknown error"
