@@ -42,7 +42,8 @@ def test_client_get_headers():
     headers = client._get_headers(include_secret=True, include_user_ip=True)
     assert headers["x-sideshift-secret"] == "test-secret"
     assert headers["x-user-ip"] == "1.2.3.4"
-    assert headers["Content-Type"] == "application/json"
+    assert headers["Content-Type"] == "application/json; charset=utf-8"
+    assert headers["Accept"] == "application/json; charset=utf-8"
 
 
 def test_client_handle_response_success():
@@ -542,6 +543,28 @@ async def test_async_client_validate_request_body_in_request():
     # Ensure client is properly closed if it was created
     if client._client is not None:
         await client.close()
+
+
+def test_client_parse_charset_from_content_type():
+    """Test parsing charset from Content-Type header."""
+    client = SideShiftClient(secret="test-secret")
+    
+    # Content-Type with charset
+    assert client._parse_charset_from_content_type("application/json; charset=utf-8") == "utf-8"
+    assert client._parse_charset_from_content_type("application/json;charset=utf-8") == "utf-8"
+    assert client._parse_charset_from_content_type("application/json; charset=ISO-8859-1") == "iso-8859-1"
+    
+    # Content-Type with quoted charset
+    assert client._parse_charset_from_content_type('application/json; charset="utf-8"') == "utf-8"
+    assert client._parse_charset_from_content_type("application/json; charset='utf-8'") == "utf-8"
+    
+    # Content-Type without charset (should default to utf-8)
+    assert client._parse_charset_from_content_type("application/json") == "utf-8"
+    assert client._parse_charset_from_content_type(None) == "utf-8"
+    assert client._parse_charset_from_content_type("") == "utf-8"
+    
+    # Content-Type with other parameters
+    assert client._parse_charset_from_content_type("application/json; charset=utf-8; boundary=something") == "utf-8"
 
 
 def test_client_validate_content_type_valid():

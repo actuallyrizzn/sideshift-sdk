@@ -142,8 +142,8 @@ class BaseClient:
         from sideshift_sdk import __version__
         
         headers = {
-            HEADER_CONTENT_TYPE: CONTENT_TYPE_JSON,
-            HEADER_ACCEPT: CONTENT_TYPE_JSON,
+            HEADER_CONTENT_TYPE: f"{CONTENT_TYPE_JSON}; charset=utf-8",
+            HEADER_ACCEPT: f"{CONTENT_TYPE_JSON}; charset=utf-8",
             HEADER_USER_AGENT: f"sideshift-sdk-python/{__version__}",
         }
 
@@ -318,6 +318,30 @@ class BaseClient:
                 endpoint=endpoint,
             ) from e
 
+    def _parse_charset_from_content_type(self, content_type: str | None) -> str:
+        """Parse charset from Content-Type header.
+
+        Args:
+            content_type: Content-Type header value (e.g., "application/json; charset=utf-8")
+
+        Returns:
+            Charset string (default: "utf-8")
+        """
+        if not content_type or not isinstance(content_type, str):
+            return "utf-8"
+        
+        # Parse charset from Content-Type header
+        # Format: "application/json; charset=utf-8" or "application/json;charset=utf-8"
+        parts = content_type.split(";")
+        for part in parts[1:]:  # Skip the first part (media type)
+            part = part.strip()
+            if part.lower().startswith("charset="):
+                charset = part.split("=", 1)[1].strip().strip('"\'')
+                return charset.lower()
+        
+        # Default to UTF-8 if charset not specified
+        return "utf-8"
+
     def _validate_content_type(
         self,
         response: requests.Response | httpx.Response,
@@ -491,9 +515,16 @@ class BaseClient:
                     error_text = response.text[:200] if response.text else "Empty response"
                 elif hasattr(response, "content"):
                     try:
-                        error_text = response.content.decode("utf-8")[:200]
-                    except UnicodeDecodeError:
-                        pass
+                        # Parse charset from Content-Type header
+                        content_type = response.headers.get("Content-Type") or response.headers.get("content-type") if hasattr(response, "headers") else None
+                        charset = self._parse_charset_from_content_type(content_type)
+                        error_text = response.content.decode(charset)[:200]
+                    except (UnicodeDecodeError, LookupError):
+                        # Fallback to UTF-8 if charset is invalid or not supported
+                        try:
+                            error_text = response.content.decode("utf-8")[:200]
+                        except UnicodeDecodeError:
+                            pass
                 raise SideShiftAPIError(
                     f"Failed to parse JSON response: {str(e)}. Response: {error_text}",
                     status_code,
@@ -546,9 +577,16 @@ class BaseClient:
                 error_text = response.text
             elif hasattr(response, "content"):
                 try:
-                    error_text = response.content.decode("utf-8")
-                except UnicodeDecodeError:
-                    error_text = "Unknown error"
+                    # Parse charset from Content-Type header
+                    content_type = response.headers.get("Content-Type") or response.headers.get("content-type") if hasattr(response, "headers") else None
+                    charset = self._parse_charset_from_content_type(content_type)
+                    error_text = response.content.decode(charset)
+                except (UnicodeDecodeError, LookupError):
+                    # Fallback to UTF-8 if charset is invalid or not supported
+                    try:
+                        error_text = response.content.decode("utf-8")
+                    except UnicodeDecodeError:
+                        error_text = "Unknown error"
             else:
                 error_text = "Unknown error"
             error_data = {"message": error_text or "Unknown error"}
