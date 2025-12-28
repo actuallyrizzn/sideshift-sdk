@@ -122,9 +122,13 @@ class BaseClient:
         Returns:
             Headers dictionary
         """
+        # Import here to avoid circular dependency
+        from sideshift_sdk import __version__
+        
         headers = {
             HEADER_CONTENT_TYPE: CONTENT_TYPE_JSON,
             HEADER_ACCEPT: CONTENT_TYPE_JSON,
+            HEADER_USER_AGENT: f"sideshift-sdk-python/{__version__}",
         }
 
         if include_secret and self.secret:
