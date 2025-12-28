@@ -530,10 +530,15 @@ def test_client_validate_request_body_in_request():
 @pytest.mark.asyncio
 async def test_async_client_validate_request_body_in_request():
     """Test that request body validation is called in async _request method."""
+    # Invalid type should be caught before making HTTP request (before _get_client is called)
+    # So we don't need to mock anything or use context manager
     client = AsyncSideShiftClient(secret="test-secret")
     
-    # Invalid type should be caught before making HTTP request
     with pytest.raises(SideShiftAPIError) as exc_info:
         await client._request("POST", "/test", json_data="not a dict")
     assert exc_info.value.status_code == 400
     assert "must be a dictionary" in exc_info.value.message
+    
+    # Ensure client is properly closed if it was created
+    if client._client is not None:
+        await client.close()
