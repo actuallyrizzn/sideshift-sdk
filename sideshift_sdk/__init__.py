@@ -22,6 +22,11 @@ from sideshift_sdk.exceptions import (
 )
 from sideshift_sdk.logging_config import configure_logging, get_logger
 from sideshift_sdk.models import ShiftStatus
+from sideshift_sdk.pagination import (
+    PaginatedIterator,
+    paginate_recent_shifts,
+    paginate_recent_shifts_async,
+)
 
 __version__ = "0.1.0"
 
@@ -39,4 +44,7 @@ __all__ = [
     "configure_logging",
     "get_logger",
     "ShiftStatus",
+    "PaginatedIterator",
+    "paginate_recent_shifts",
+    "paginate_recent_shifts_async",
 ]
