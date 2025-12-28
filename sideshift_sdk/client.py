@@ -100,8 +100,22 @@ class BaseClient:
         if status_code == 200 or status_code == 201:
             try:
                 return response.json()
-            except Exception:
-                return {}
+            except (ValueError, TypeError) as e:
+                # JSON parsing failed - this should not happen for valid API responses
+                # Try to get response text for error message
+                error_text = "Unknown error"
+                if hasattr(response, "text"):
+                    error_text = response.text[:200] if response.text else "Empty response"
+                elif hasattr(response, "content"):
+                    try:
+                        error_text = response.content.decode("utf-8")[:200]
+                    except Exception:
+                        pass
+                raise SideShiftAPIError(
+                    f"Failed to parse JSON response: {str(e)}. Response: {error_text}",
+                    status_code,
+                    {"raw_response": error_text},
+                )
 
         # Handle rate limiting
         if status_code == 429:

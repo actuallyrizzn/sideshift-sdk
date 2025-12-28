@@ -54,6 +54,37 @@ def test_client_handle_response_success():
     assert result == {"data": "test"}
 
 
+def test_client_handle_response_200_json_parse_error():
+    """Test 200 response handling when JSON parsing fails."""
+    client = SideShiftClient()
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.side_effect = ValueError("Invalid JSON")
+    mock_response.text = "HTML error page"
+
+    with pytest.raises(SideShiftAPIError) as exc_info:
+        client._handle_response(mock_response)
+
+    assert exc_info.value.status_code == 200
+    assert "Failed to parse JSON" in exc_info.value.message
+    assert "HTML error page" in exc_info.value.message
+
+
+def test_client_handle_response_201_json_parse_error():
+    """Test 201 response handling when JSON parsing fails."""
+    client = SideShiftClient()
+    mock_response = Mock()
+    mock_response.status_code = 201
+    mock_response.json.side_effect = TypeError("Not JSON")
+    mock_response.text = "Plain text response"
+
+    with pytest.raises(SideShiftAPIError) as exc_info:
+        client._handle_response(mock_response)
+
+    assert exc_info.value.status_code == 201
+    assert "Failed to parse JSON" in exc_info.value.message
+
+
 def test_client_handle_response_401():
     """Test 401 response handling."""
     client = SideShiftClient()
