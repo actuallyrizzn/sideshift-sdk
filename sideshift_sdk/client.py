@@ -820,23 +820,34 @@ class AsyncSideShiftClient(BaseClient):
                     method=method,
                     endpoint=endpoint,
                 ) from e
-            except httpx.RequestError as e:
-                # Other httpx exceptions (DNS, SSL, etc.)
-                if self._enable_logging:
-                    self._logger.error(f"Request error for {method} {endpoint} [Request-ID: {request_id}]: {str(e)}")
-                raise SideShiftNetworkError(f"Network request failed: {str(e)}", response_data={"request_id": request_id} if request_id else None) from e
-                # Call error hooks (support both sync and async)
-                for hook in self._error_hooks:
-                    try:
-                        if inspect.iscoroutinefunction(hook):
-                            await hook(network_error, method, endpoint)
-                        else:
-                            hook(network_error, method, endpoint)
-                    except Exception as hook_error:
+                    except asyncio.CancelledError:
+                        # Request was cancelled - re-raise to allow proper cancellation
                         if self._enable_logging:
-                            self._logger.warning(f"Error hook error: {hook_error}")
-                raise network_error from e
-            except SideShiftException as e:
+                            self._logger.debug(f"Request cancelled: {method} {endpoint} [Request-ID: {request_id}]")
+                        raise
+                    except httpx.RequestError as e:
+                        # Other httpx exceptions (DNS, SSL, etc.)
+                        if self._enable_logging:
+                            self._logger.error(f"Request error for {method} {endpoint} [Request-ID: {request_id}]: {str(e)}")
+                        network_error = SideShiftNetworkError(
+                            f"Network request failed: {str(e)}",
+                            response_data={"request_id": request_id} if request_id else None,
+                            request_id=request_id,
+                            method=method,
+                            endpoint=endpoint,
+                        )
+                        # Call error hooks (support both sync and async)
+                        for hook in self._error_hooks:
+                            try:
+                                if inspect.iscoroutinefunction(hook):
+                                    await hook(network_error, method, endpoint)
+                                else:
+                                    hook(network_error, method, endpoint)
+                            except Exception as hook_error:
+                                if self._enable_logging:
+                                    self._logger.warning(f"Error hook error: {hook_error}")
+                        raise network_error from e
+                    except SideShiftException as e:
                 # Call error hooks for SDK exceptions (support both sync and async)
                 for hook in self._error_hooks:
                     try:
