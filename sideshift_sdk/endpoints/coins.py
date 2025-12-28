@@ -16,6 +16,13 @@ def get_coins(client: "SideShiftClient") -> list[Coin]:
 
     Returns:
         List of Coin objects
+
+    Examples:
+        >>> client = SideShiftClient()
+        >>> coins_list = get_coins(client)
+        >>> print(f"Available coins: {len(coins_list)}")
+        >>> for coin in coins_list[:5]:
+        ...     print(f"{coin.coin} on {coin.networks}")
     """
     response = client.get("/coins", require_auth=False)
     return [Coin(**coin_data) for coin_data in response]

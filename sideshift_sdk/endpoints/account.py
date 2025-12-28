@@ -16,6 +16,11 @@ def get_account(client: "SideShiftClient") -> Account:
 
     Returns:
         Account object
+
+    Examples:
+        >>> client = SideShiftClient(secret="your-secret")
+        >>> account = get_account(client)
+        >>> print(f"Balance: {account.total_balance}, Available: {account.available}")
     """
     response = client.get("/account", require_auth=True)
     return Account(**response)

@@ -24,6 +24,11 @@ def get_shift(client: "SideShiftClient", shift_id: str) -> Shift:
 
     Returns:
         Shift object
+
+    Examples:
+        >>> client = SideShiftClient()
+        >>> shift = get_shift(client, shift_id="your-shift-id")
+        >>> print(f"Status: {shift.status}, Deposit: {shift.deposit_address}")
     """
     response = client.get(f"/shifts/{shift_id}", require_auth=False)
     return Shift(**response)
@@ -139,6 +144,16 @@ def create_fixed_shift(
 
     Returns:
         Shift object
+
+    Examples:
+        >>> client = SideShiftClient(secret="your-secret", affiliate_id="your-id")
+        >>> quote = request_quote(client, "btc", "eth", deposit_amount="0.1")
+        >>> shift = create_fixed_shift(
+        ...     client,
+        ...     quote_id=quote.id,
+        ...     settle_address="0x...",
+        ... )
+        >>> print(f"Shift ID: {shift.id}, Deposit Address: {shift.deposit_address}")
     """
     request_data = FixedShiftRequest(
         settle_address=settle_address,
@@ -247,6 +262,18 @@ def create_variable_shift(
 
     Returns:
         Shift object
+
+    Examples:
+        >>> client = SideShiftClient(secret="your-secret", affiliate_id="your-id")
+        >>> shift = create_variable_shift(
+        ...     client,
+        ...     deposit_coin="btc",
+        ...     settle_coin="eth",
+        ...     settle_address="0x...",
+        ...     deposit_network="bitcoin",
+        ...     settle_network="mainnet",
+        ... )
+        >>> print(f"Variable shift created: {shift.id}")
     """
     request_data = VariableShiftRequest(
         deposit_coin=deposit_coin,

@@ -64,6 +64,20 @@ def create_checkout(
 
     Returns:
         Checkout object
+
+    Examples:
+        >>> client = SideShiftClient(secret="your-secret", user_ip="1.2.3.4")
+        >>> checkout = create_checkout(
+        ...     client,
+        ...     settle_coin="eth",
+        ...     settle_network="mainnet",
+        ...     settle_amount="1.0",
+        ...     settle_address="0x...",
+        ...     affiliate_id="your-id",
+        ...     success_url="https://example.com/success",
+        ...     cancel_url="https://example.com/cancel",
+        ... )
+        >>> print(f"Checkout URL: {checkout.checkout_url}")
     """
     request_data = CheckoutRequest(
         settle_coin=settle_coin,

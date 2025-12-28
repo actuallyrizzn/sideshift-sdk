@@ -28,6 +28,11 @@ def get_pair(
 
     Returns:
         PairInfo object
+
+    Examples:
+        >>> client = SideShiftClient(secret="your-secret", affiliate_id="your-id")
+        >>> pair = get_pair(client, from_coin="btc", to_coin="eth")
+        >>> print(f"Rate: {pair.rate}, Min: {pair.min}, Max: {pair.max}")
     """
     params: dict[str, str | float] = {
         "affiliateId": affiliate_id or client.affiliate_id or "",
@@ -94,6 +99,12 @@ def get_pairs(
 
     Returns:
         List of PairInfo objects
+
+    Examples:
+        >>> client = SideShiftClient(secret="your-secret", affiliate_id="your-id")
+        >>> pairs_list = get_pairs(client, pairs=["btc-mainnet", "eth-mainnet"])
+        >>> for pair in pairs_list:
+        ...     print(f"{pair.from_coin} -> {pair.to_coin}: {pair.rate}")
     """
     params: dict[str, str] = {
         "pairs": ",".join(pairs),

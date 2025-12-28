@@ -39,6 +39,18 @@ def request_quote(
 
     Raises:
         ValueError: If both deposit_amount and settle_amount are None
+
+    Examples:
+        >>> client = SideShiftClient(secret="your-secret", affiliate_id="your-id")
+        >>> quote = request_quote(
+        ...     client,
+        ...     deposit_coin="btc",
+        ...     settle_coin="eth",
+        ...     deposit_amount="0.1",
+        ...     deposit_network="bitcoin",
+        ...     settle_network="mainnet",
+        ... )
+        >>> print(f"Quote ID: {quote.id}, Rate: {quote.rate}")
     """
     if deposit_amount is None and settle_amount is None:
         raise ValueError("Either deposit_amount or settle_amount must be provided")
@@ -99,6 +111,16 @@ async def request_quote_async(
 
     Raises:
         ValueError: If both deposit_amount and settle_amount are None
+
+    Examples:
+        >>> async with AsyncSideShiftClient(secret="your-secret") as client:
+        ...     quote = await request_quote_async(
+        ...         client,
+        ...         deposit_coin="btc",
+        ...         settle_coin="eth",
+        ...         deposit_amount="0.1",
+        ...     )
+        ...     print(f"Quote ID: {quote.id}")
     """
     if deposit_amount is None and settle_amount is None:
         raise ValueError("Either deposit_amount or settle_amount must be provided")
