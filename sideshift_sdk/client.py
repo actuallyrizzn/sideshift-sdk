@@ -1545,6 +1545,67 @@ class SideShiftClient(BaseClient):
 
         return response.content
 
+    def stream_get(
+        self,
+        endpoint: str,
+        params: JsonDict | None = None,
+        headers: HeadersDict | None = None,
+        require_auth: bool = False,
+        require_user_ip: bool = False,
+        timeout: int | None = None,
+        chunk_size: int = 8192,
+    ):
+        """Stream GET request and yield response chunks.
+
+        Args:
+            endpoint: API endpoint
+            params: Query parameters
+            headers: Additional headers
+            require_auth: Whether authentication is required
+            require_user_ip: Whether user IP header is required
+            timeout: Request timeout in seconds (if None, uses client-level timeout)
+            chunk_size: Size of chunks to yield (default: 8192 bytes)
+
+        Yields:
+            Response chunks as bytes
+
+        Example:
+            >>> for chunk in client.stream_get("/large-endpoint"):
+            ...     process_chunk(chunk)
+        """
+        url = f"{self.base_url}{endpoint}"
+        sdk_headers = self._get_headers(
+            include_secret=require_auth, include_user_ip=require_user_ip
+        )
+        request_headers = self._merge_headers(sdk_headers, headers)
+        request_timeout = self.timeout if timeout is None else timeout
+
+        response = self._session.get(
+            url,
+            params=params,
+            headers=request_headers,
+            timeout=request_timeout,
+            stream=True,
+            verify=self.verify_ssl,
+            proxies=self.proxy if self.proxy else None,
+        )
+
+        if response.status_code != 200:
+            # For non-200, read response to get error details
+            response.raw.decode_content = True
+            self._handle_response(
+                response,
+                method="GET",
+                endpoint=endpoint,
+                max_response_size=self.max_response_size,
+            )
+            return
+
+        response.raw.decode_content = True
+        for chunk in response.iter_content(chunk_size=chunk_size):
+            if chunk:
+                yield chunk
+
     def batch_get(
         self,
         requests: list[tuple[str, JsonDict | None, HeadersDict | None]],
