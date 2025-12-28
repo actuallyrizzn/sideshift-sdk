@@ -165,12 +165,20 @@ class BaseClient:
         if hook in self._error_hooks:
             self._error_hooks.remove(hook)
 
-    def _handle_response(self, response: requests.Response | httpx.Response, request_id: str | None = None) -> JsonDict:
+    def _handle_response(
+        self,
+        response: requests.Response | httpx.Response,
+        request_id: str | None = None,
+        method: str | None = None,
+        endpoint: str | None = None,
+    ) -> JsonDict:
         """Handle HTTP response and raise appropriate exceptions.
 
         Args:
             response: HTTP response object
             request_id: Request ID for correlation tracking (optional)
+            method: HTTP method (GET, POST, etc.) for error context
+            endpoint: API endpoint for error context
 
         Returns:
             Response JSON data
@@ -210,6 +218,9 @@ class BaseClient:
                     f"Failed to parse JSON response: {str(e)}. Response: {error_text}",
                     status_code,
                     add_request_id_to_error_data({"raw_response": error_text}),
+                    request_id=request_id,
+                    method=method,
+                    endpoint=endpoint,
                 )
 
         # Handle rate limiting
@@ -224,6 +235,9 @@ class BaseClient:
             raise SideShiftRateLimitError(
                 "Rate limit exceeded",
                 response_data=add_request_id_to_error_data(error_data) if error_data else add_request_id_to_error_data(None),
+                request_id=request_id,
+                method=method,
+                endpoint=endpoint,
             )
 
         # Handle other errors
@@ -244,19 +258,36 @@ class BaseClient:
 
         if status_code == 401:
             raise SideShiftAuthenticationError(
-                error_data.get("message", "Authentication failed"), add_request_id_to_error_data(error_data)
+                error_data.get("message", "Authentication failed"),
+                add_request_id_to_error_data(error_data),
+                request_id=request_id,
+                method=method,
+                endpoint=endpoint,
             )
         elif status_code == 403:
-            raise SideShiftForbiddenError(error_data.get("message", "Access forbidden"), add_request_id_to_error_data(error_data))
+            raise SideShiftForbiddenError(
+                error_data.get("message", "Access forbidden"),
+                add_request_id_to_error_data(error_data),
+                request_id=request_id,
+                method=method,
+                endpoint=endpoint,
+            )
         elif status_code == 404:
             raise SideShiftNotFoundError(
-                error_data.get("message", "Resource not found"), add_request_id_to_error_data(error_data)
+                error_data.get("message", "Resource not found"),
+                add_request_id_to_error_data(error_data),
+                request_id=request_id,
+                method=method,
+                endpoint=endpoint,
             )
         else:
             raise SideShiftAPIError(
                 error_data.get("message", f"API error: {status_code}"),
                 status_code,
                 add_request_id_to_error_data(error_data),
+                request_id=request_id,
+                method=method,
+                endpoint=endpoint,
             )
 
 
@@ -395,7 +426,7 @@ class SideShiftClient(BaseClient):
                         log_msg += f" [Response-Request-ID: {response_request_id}]"
                     self._logger.debug(log_msg)
 
-                response_data = self._handle_response(response, request_id=request_id)
+                response_data = self._handle_response(response, request_id=request_id, method=method, endpoint=endpoint)
                 
                 # Call response hooks
                 for hook in self._response_hooks:
@@ -427,7 +458,13 @@ class SideShiftClient(BaseClient):
                     error_msg = f"Request timeout after {self.timeout} seconds"
                 if self._enable_logging:
                     self._logger.error(f"Network error for {method} {endpoint} [Request-ID: {request_id}]: {error_msg}")
-                network_error = SideShiftNetworkError(error_msg, response_data={"request_id": request_id} if request_id else None)
+                network_error = SideShiftNetworkError(
+                    error_msg,
+                    response_data={"request_id": request_id} if request_id else None,
+                    request_id=request_id,
+                    method=method,
+                    endpoint=endpoint,
+                )
                 # Call error hooks
                 for hook in self._error_hooks:
                     try:
@@ -440,7 +477,13 @@ class SideShiftClient(BaseClient):
                 # Other requests exceptions (DNS, SSL, etc.)
                 if self._enable_logging:
                     self._logger.error(f"Request exception for {method} {endpoint} [Request-ID: {request_id}]: {str(e)}")
-                network_error = SideShiftNetworkError(f"Network request failed: {str(e)}", response_data={"request_id": request_id} if request_id else None)
+                network_error = SideShiftNetworkError(
+                    f"Network request failed: {str(e)}",
+                    response_data={"request_id": request_id} if request_id else None,
+                    request_id=request_id,
+                    method=method,
+                    endpoint=endpoint,
+                )
                 # Call error hooks
                 for hook in self._error_hooks:
                     try:
@@ -549,7 +592,7 @@ class SideShiftClient(BaseClient):
         )
 
         if response.status_code != 200:
-            self._handle_response(response)
+            self._handle_response(response, method=method, endpoint=endpoint)
             return b""
 
         return response.content
@@ -713,7 +756,7 @@ class AsyncSideShiftClient(BaseClient):
                         log_msg += f" [Response-Request-ID: {response_request_id}]"
                     self._logger.debug(log_msg)
 
-                response_data = self._handle_response(response, request_id=request_id)
+                response_data = self._handle_response(response, request_id=request_id, method=method, endpoint=endpoint)
                 
                 # Call response hooks (support both sync and async)
                 for hook in self._response_hooks:
@@ -748,7 +791,13 @@ class AsyncSideShiftClient(BaseClient):
                     error_msg = f"Request timeout after {self.timeout} seconds"
                 if self._enable_logging:
                     self._logger.error(f"Network error for {method} {endpoint} [Request-ID: {request_id}]: {error_msg}")
-                raise SideShiftNetworkError(error_msg, response_data={"request_id": request_id} if request_id else None) from e
+                raise SideShiftNetworkError(
+                    error_msg,
+                    response_data={"request_id": request_id} if request_id else None,
+                    request_id=request_id,
+                    method=method,
+                    endpoint=endpoint,
+                ) from e
             except httpx.RequestError as e:
                 # Other httpx exceptions (DNS, SSL, etc.)
                 if self._enable_logging:
@@ -840,7 +889,7 @@ class AsyncSideShiftClient(BaseClient):
         )
 
         if response.status_code != 200:
-            self._handle_response(response)
+            self._handle_response(response, method="GET", endpoint=endpoint)
             return b""
 
         return response.content
