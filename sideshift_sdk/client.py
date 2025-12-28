@@ -8,6 +8,8 @@ import os
 import time
 import uuid
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -386,13 +388,30 @@ class BaseClient:
 
         # Handle rate limiting
         if status_code == 429:
-            retry_after = response.headers.get("Retry-After")
-            retry_seconds = int(retry_after) if retry_after and retry_after.isdigit() else None
+            retry_after = response.headers.get("Retry-After") or response.headers.get("retry-after")
+            retry_seconds = None
+            
+            if retry_after:
+                # Try to parse as integer (seconds)
+                try:
+                    retry_seconds = int(retry_after)
+                except (ValueError, TypeError):
+                    # Try to parse as HTTP-date (RFC 7231)
+                    try:
+                        retry_date = parsedate_to_datetime(retry_after)
+                        if retry_date:
+                            now = datetime.now(UTC)
+                            retry_seconds = max(0, int((retry_date - now).total_seconds()))
+                    except (ValueError, TypeError, ImportError):
+                        # If parsing fails, log warning but continue
+                        if hasattr(self, "_enable_logging") and self._enable_logging:
+                            self._logger.warning(f"Could not parse Retry-After header: {retry_after}")
+            
             if hasattr(self, "_enable_logging") and self._enable_logging:
                 self._logger.warning(
                     f"Rate limit exceeded (429). Retry after: {retry_seconds}s" if retry_seconds else "Rate limit exceeded (429)"
                 )
-            error_data = {"retry_after": retry_seconds} if retry_seconds else {}
+            error_data = {"retry_after": retry_seconds} if retry_seconds is not None else {}
             raise SideShiftRateLimitError(
                 "Rate limit exceeded",
                 response_data=add_request_id_to_error_data(error_data) if error_data else add_request_id_to_error_data(None),
@@ -647,15 +666,25 @@ class SideShiftClient(BaseClient):
                 
                 return response_data
 
-            except SideShiftRateLimitError:
+            except SideShiftRateLimitError as rate_limit_error:
                 if self._enable_logging:
                     self._logger.warning(
                         f"Rate limit exceeded for {method} {endpoint} (attempt {attempt + 1}/{retry_count + 1}) [Request-ID: {request_id}]"
                     )
                 if attempt < retry_count:
-                    wait_time = exponential_backoff(attempt)
-                    if self._enable_logging:
-                        self._logger.debug(f"Retrying after {wait_time:.2f}s")
+                    # Use Retry-After header value if available, otherwise use exponential backoff
+                    retry_after = None
+                    if rate_limit_error.response_data and "retry_after" in rate_limit_error.response_data:
+                        retry_after = rate_limit_error.response_data.get("retry_after")
+                    
+                    if retry_after is not None and retry_after > 0:
+                        wait_time = float(retry_after)
+                        if self._enable_logging:
+                            self._logger.debug(f"Retrying after {wait_time:.2f}s (from Retry-After header)")
+                    else:
+                        wait_time = exponential_backoff(attempt)
+                        if self._enable_logging:
+                            self._logger.debug(f"Retrying after {wait_time:.2f}s (exponential backoff)")
                     time.sleep(wait_time)
                     continue
                 raise
@@ -1105,15 +1134,25 @@ class AsyncSideShiftClient(BaseClient):
                 
                 return response_data
 
-            except SideShiftRateLimitError:
+            except SideShiftRateLimitError as rate_limit_error:
                 if self._enable_logging:
                     self._logger.warning(
                         f"Rate limit exceeded for {method} {endpoint} (attempt {attempt + 1}/{retry_count + 1}) [Request-ID: {request_id}]"
                     )
                 if attempt < retry_count:
-                    wait_time = exponential_backoff(attempt)
-                    if self._enable_logging:
-                        self._logger.debug(f"Retrying after {wait_time:.2f}s")
+                    # Use Retry-After header value if available, otherwise use exponential backoff
+                    retry_after = None
+                    if rate_limit_error.response_data and "retry_after" in rate_limit_error.response_data:
+                        retry_after = rate_limit_error.response_data.get("retry_after")
+                    
+                    if retry_after is not None and retry_after > 0:
+                        wait_time = float(retry_after)
+                        if self._enable_logging:
+                            self._logger.debug(f"Retrying after {wait_time:.2f}s (from Retry-After header)")
+                    else:
+                        wait_time = exponential_backoff(attempt)
+                        if self._enable_logging:
+                            self._logger.debug(f"Retrying after {wait_time:.2f}s (exponential backoff)")
                     await asyncio.sleep(wait_time)
                     continue
                 raise

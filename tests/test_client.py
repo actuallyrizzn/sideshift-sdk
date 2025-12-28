@@ -264,23 +264,78 @@ def test_client_rate_limit_retry(mock_session_class):
     success_response = Mock()
     success_response.status_code = 200
     success_response.json.return_value = {"data": "success"}
+    success_response.content = b'{"data": "success"}'
+    success_response.headers = {}
 
     mock_session.request.side_effect = [
-        requests.exceptions.RequestException("Rate limited"),
+        rate_limit_response,
         success_response,
     ]
 
-    client = SideShiftClient(secret="test-secret")
+    client = SideShiftClient(secret="test-secret", max_retries=1)
 
-    # Mock the _handle_response to raise rate limit error
-    with patch.object(
-        client,
-        "_handle_response",
-        side_effect=[SideShiftRateLimitError("Rate limited"), {"data": "success"}],
-    ):
-        # This will fail because we're not properly handling the retry in the test
-        # But we can test the structure
-        pass
+    # Should retry and succeed
+    result = client.get("/test")
+    assert result == {"data": "success"}
+    assert mock_session.request.call_count == 2
+
+
+def test_client_retry_after_header_parsing():
+    """Test that Retry-After header is parsed and used for retry delay."""
+    client = SideShiftClient(secret="test-secret", max_retries=1, enable_logging=True)
+    
+    # Test integer format (seconds)
+    mock_response = Mock()
+    mock_response.status_code = 429
+    mock_response.headers = {"Retry-After": "5"}
+    mock_response.json.return_value = {"error": "Rate limited"}
+    mock_response.text = '{"error": "Rate limited"}'
+    mock_response.content = b'{"error": "Rate limited"}'
+    
+    # Should raise SideShiftRateLimitError
+    with pytest.raises(SideShiftRateLimitError) as exc_info:
+        client._handle_response(mock_response, method="GET", endpoint="/test")
+    
+    assert exc_info.value.response_data is not None
+    assert exc_info.value.response_data.get("retry_after") == 5
+
+
+def test_client_retry_after_header_used_in_retry():
+    """Test that Retry-After header value is used for retry delay instead of exponential backoff."""
+    import time
+    from unittest.mock import patch
+    
+    client = SideShiftClient(secret="test-secret", max_retries=1, enable_logging=True)
+    
+    # First response: 429 with Retry-After: 2
+    rate_limit_response = Mock()
+    rate_limit_response.status_code = 429
+    rate_limit_response.headers = {"Retry-After": "2"}
+    rate_limit_response.json.return_value = {"error": "Rate limited"}
+    rate_limit_response.text = '{"error": "Rate limited"}'
+    rate_limit_response.content = b'{"error": "Rate limited"}'
+    
+    # Second response: 200 success
+    success_response = Mock()
+    success_response.status_code = 200
+    success_response.json.return_value = {"data": "success"}
+    success_response.content = b'{"data": "success"}'
+    success_response.headers = {}
+    
+    mock_session = Mock()
+    mock_session.request.side_effect = [rate_limit_response, success_response]
+    client._session = mock_session
+    
+    # Mock time.sleep to verify the delay
+    with patch("sideshift_sdk.client.time.sleep") as mock_sleep:
+        result = client.get("/test")
+        assert result == {"data": "success"}
+        # Verify that sleep was called with the Retry-After value (2 seconds)
+        assert mock_sleep.called
+        # Check that the sleep time was approximately 2 seconds (from Retry-After)
+        # It should be 2.0, not the exponential backoff value
+        call_args = mock_sleep.call_args[0]
+        assert call_args[0] == 2.0  # Should use Retry-After value
 
 
 def test_client_close():
