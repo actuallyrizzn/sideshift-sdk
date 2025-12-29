@@ -1342,13 +1342,13 @@ class SideShiftClient(BaseClient):
                 self._log_response(method, endpoint, response.status_code, request_id, response_request_id)
 
                 response_data = self._handle_response(
-                    response,
-                    request_id=request_id,
-                    method=method,
+                    response, 
+                    request_id=request_id, 
+                    method=method, 
                     endpoint=endpoint,
                     max_response_size=self.max_response_size,
                 )
-
+                
                 self._call_response_hooks(method, endpoint, response_data)
                 
                 # Record circuit breaker success
@@ -1919,26 +1919,26 @@ class AsyncSideShiftClient(BaseClient):
 
                     # Make HTTP request (async-specific)
                     response = await client.request(
-                        method=method,
-                        url=url,
-                        params=params,
-                        json=json_data,
-                        headers=request_headers,
-                        timeout=request_timeout,
-                    )
+                    method=method,
+                    url=url,
+                    params=params,
+                    json=json_data,
+                    headers=request_headers,
+                    timeout=request_timeout,
+                )
 
                     # Extract request ID from response headers if present (API may echo it back)
                     response_request_id = response.headers.get(HEADER_REQUEST_ID.lower()) or response.headers.get(HEADER_REQUEST_ID)
                     self._log_response(method, endpoint, response.status_code, request_id, response_request_id)
 
                     response_data = self._handle_response(
-                        response,
-                        request_id=request_id,
-                        method=method,
+                        response, 
+                        request_id=request_id, 
+                        method=method, 
                         endpoint=endpoint,
                         max_response_size=self.max_response_size,
                     )
-
+                    
                     await self._call_response_hooks_async(method, endpoint, response_data)
                     
                     # Record circuit breaker success
@@ -1980,8 +1980,8 @@ class AsyncSideShiftClient(BaseClient):
                             self._metrics["failed_requests"] += 1
                     if self._enable_logging:
                         self._logger.warning(
-                        f"Rate limit exceeded for {method} {endpoint} (attempt {attempt + 1}/{retry_count + 1}) [Request-ID: {request_id}]"
-                    )
+                            f"Rate limit exceeded for {method} {endpoint} (attempt {attempt + 1}/{retry_count + 1}) [Request-ID: {request_id}]"
+                        )
                     if attempt < retry_count:
                         wait_time = self._calculate_retry_wait_time(rate_limit_error, attempt)
                         await asyncio.sleep(wait_time)
@@ -2051,7 +2051,7 @@ class AsyncSideShiftClient(BaseClient):
                         future_to_complete = self._in_flight_requests.pop(request_key)
                         if not future_to_complete.done():
                             future_to_complete.set_exception(e)
-            raise
+                raise
 
     async def get(
         self,

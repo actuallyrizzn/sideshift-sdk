@@ -104,6 +104,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Live test credentials
+tests/live/.env
+
 # Spyder project settings
 .spyderproject
 .spyproject
