@@ -30,8 +30,11 @@ if not ACCOUNT_ID or not API_SECRET:
     )
 
 def test_request_quote():
-    """Test requesting a quote for a fixed rate shift."""
-    print("\n=== Testing request_quote() ===")
+    """Test requesting a quote for a fixed rate shift.
+    
+    This tests POST /api/v2/quotes which is failing in the live app with 403 Forbidden.
+    """
+    print("\n=== Testing request_quote() (POST /api/v2/quotes) ===")
     client = SideShiftClient(secret=API_SECRET, affiliate_id=ACCOUNT_ID)
     
     try:
@@ -46,19 +49,24 @@ def test_request_quote():
             settle_network="mainnet",
             affiliate_id=ACCOUNT_ID
         )
-        print(f"Quote ID: {quote.id}")
-        print(f"Deposit: {quote.deposit_amount} {quote.deposit_coin}")
-        print(f"Settle: {quote.settle_amount} {quote.settle_coin}")
-        print(f"Rate: {quote.rate}")
+        print(f"[OK] Quote requested successfully!")
+        print(f"  Quote ID: {quote.id}")
+        print(f"  Deposit: {quote.deposit_amount} {quote.deposit_coin}")
+        print(f"  Settle: {quote.settle_amount} {quote.settle_coin}")
+        print(f"  Rate: {quote.rate}")
         if hasattr(quote, 'expires_at'):
-            print(f"Expires: {quote.expires_at}")
-        print("[OK] Quote requested successfully")
+            print(f"  Expires: {quote.expires_at}")
         return quote
     except Exception as e:
         error_msg = str(e)
-        if "forbidden" in error_msg.lower() or "Access forbidden" in error_msg:
-            print(f"[WARN] Quote requires user_ip header (expected behavior)")
-            print(f"       This is normal - quotes need user IP for security")
+        if "forbidden" in error_msg.lower() or "Access forbidden" in error_msg or "403" in error_msg:
+            print(f"[FAIL] POST /api/v2/quotes returned 403 Forbidden")
+            print(f"       This matches the error in your live app!")
+            print(f"       Possible causes:")
+            print(f"       1. API secret doesn't have quote permissions")
+            print(f"       2. Missing or invalid user_ip header")
+            print(f"       3. Account doesn't have API access enabled")
+            print(f"       Error: {error_msg}")
             return None
         print(f"[ERROR] Error: {e}")
         import traceback

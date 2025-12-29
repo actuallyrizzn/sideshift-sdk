@@ -111,6 +111,98 @@ def test_get_bulk_shifts():
         traceback.print_exc()
         return None
 
+def test_create_variable_shift():
+    """Test creating a variable rate shift.
+    
+    This tests POST /api/v2/shifts/variable which is failing in the live app with 403 Forbidden.
+    """
+    print("\n=== Testing create_variable_shift() (POST /api/v2/shifts/variable) ===")
+    client = SideShiftClient(secret=API_SECRET, affiliate_id=ACCOUNT_ID)
+    
+    try:
+        # Create a variable shift - small test amount
+        # Using a test address (you'd use a real address in production)
+        test_settle_address = "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"  # Test ETH address
+        
+        shift = shifts.create_variable_shift(
+            client,
+            deposit_coin="btc",
+            settle_coin="eth",
+            settle_address=test_settle_address,
+            deposit_network="bitcoin",
+            settle_network="mainnet",
+            affiliate_id=ACCOUNT_ID
+        )
+        print(f"[OK] Variable shift created successfully!")
+        print(f"  Shift ID: {shift.id}")
+        print(f"  Status: {shift.status}")
+        print(f"  Deposit Address: {shift.deposit_address}")
+        print(f"  Deposit Coin: {shift.deposit_coin} -> Settle Coin: {shift.settle_coin}")
+        return shift
+    except Exception as e:
+        error_msg = str(e)
+        if "forbidden" in error_msg.lower() or "Access forbidden" in error_msg or "403" in error_msg:
+            print(f"[FAIL] POST /api/v2/shifts/variable returned 403 Forbidden")
+            print(f"       This matches the error in your live app!")
+            print(f"       Possible causes:")
+            print(f"       1. API secret doesn't have shift creation permissions")
+            print(f"       2. Missing or invalid affiliate_id")
+            print(f"       3. Missing or invalid user_ip header")
+            print(f"       4. Account doesn't have API access enabled")
+            print(f"       Error: {error_msg}")
+            return None
+        print(f"[ERROR] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def test_create_fixed_shift():
+    """Test creating a fixed rate shift.
+    
+    This requires a quote first, so it's a two-step process.
+    """
+    print("\n=== Testing create_fixed_shift() (POST /api/v2/shifts/fixed) ===")
+    client = SideShiftClient(secret=API_SECRET, affiliate_id=ACCOUNT_ID)
+    
+    try:
+        # First, try to get a quote (this may fail with 403)
+        from sideshift_sdk.endpoints import quotes
+        quote = quotes.request_quote(
+            client,
+            deposit_coin="btc",
+            settle_coin="eth",
+            deposit_amount="0.01",
+            deposit_network="bitcoin",
+            settle_network="mainnet",
+            affiliate_id=ACCOUNT_ID
+        )
+        
+        # If quote succeeded, try to create fixed shift
+        test_settle_address = "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"  # Test ETH address
+        
+        shift = shifts.create_fixed_shift(
+            client,
+            quote_id=quote.id,
+            settle_address=test_settle_address,
+            affiliate_id=ACCOUNT_ID
+        )
+        print(f"[OK] Fixed shift created successfully!")
+        print(f"  Shift ID: {shift.id}")
+        print(f"  Status: {shift.status}")
+        print(f"  Deposit Address: {shift.deposit_address}")
+        return shift
+    except Exception as e:
+        error_msg = str(e)
+        if "forbidden" in error_msg.lower() or "Access forbidden" in error_msg or "403" in error_msg:
+            print(f"[FAIL] POST /api/v2/shifts/fixed or /api/v2/quotes returned 403 Forbidden")
+            print(f"       This matches the error in your live app!")
+            print(f"       Error: {error_msg}")
+            return None
+        print(f"[ERROR] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
 def main():
     """Run all shift tests."""
     print("=" * 60)
@@ -123,6 +215,8 @@ def main():
     results['recent_shifts'] = test_get_recent_shifts()
     results['shift'] = test_get_shift()
     results['bulk_shifts'] = test_get_bulk_shifts()
+    results['create_variable_shift'] = test_create_variable_shift()
+    results['create_fixed_shift'] = test_create_fixed_shift()
     
     print("\n" + "=" * 60)
     print("Test Summary")
@@ -130,11 +224,14 @@ def main():
     for test_name, result in results.items():
         if test_name in ("shift", "bulk_shifts") and result is None:
             status = "[SKIP] (requires shift ID)"
+        elif test_name in ("create_variable_shift", "create_fixed_shift") and result is None:
+            status = "[FAIL] (403 Forbidden - matches live app error)"
         else:
             status = "[PASS]" if result is not None else "[FAIL]"
         print(f"{test_name}: {status}")
     
     # Consider it a pass if recent_shifts works (main functionality)
+    # But note if create_variable_shift fails (this is the failing endpoint)
     return results.get('recent_shifts') is not None
 
 if __name__ == "__main__":
